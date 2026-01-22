@@ -74,6 +74,23 @@ class SierraMessenger:
         if self.bluetooth_manager.connected_device:
             sender = self.bluetooth_manager.connected_device.name
         
+        # Sanitize filename to prevent path traversal attacks
+        # Remove any directory components and keep only the basename
+        filename = os.path.basename(filename)
+        
+        # Remove any potentially dangerous characters
+        # Allow only alphanumeric, dots, dashes, underscores
+        import re
+        filename = re.sub(r'[^\w\-_\. ]', '_', filename)
+        
+        # Prevent hidden files
+        if filename.startswith('.'):
+            filename = '_' + filename
+        
+        # Ensure filename is not empty after sanitization
+        if not filename or filename.strip() == '':
+            filename = 'received_file'
+        
         # Save the file
         filepath = os.path.join(self.received_files_dir, filename)
         

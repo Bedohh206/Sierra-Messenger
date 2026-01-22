@@ -184,6 +184,10 @@ class BluetoothManager:
     
     def _receive_loop(self):
         """Receive messages from the connected device (runs in a separate thread)."""
+        # Maximum message size: 100 MB for files, 10 MB for text
+        MAX_MESSAGE_SIZE = 100 * 1024 * 1024  # 100 MB
+        MAX_TEXT_SIZE = 10 * 1024 * 1024  # 10 MB
+        
         while self.client_sock:
             try:
                 # Receive message type (1 byte)
@@ -200,6 +204,17 @@ class BluetoothManager:
                 
                 message_length = int.from_bytes(length_data, byteorder='big')
                 
+                # Validate message length based on type
+                if msg_type == 0x01 and message_length > MAX_TEXT_SIZE:
+                    logger.error(f"Text message too large: {message_length} bytes (max {MAX_TEXT_SIZE})")
+                    break
+                elif msg_type == 0x02 and message_length > MAX_MESSAGE_SIZE:
+                    logger.error(f"File message too large: {message_length} bytes (max {MAX_MESSAGE_SIZE})")
+                    break
+                elif message_length <= 0:
+                    logger.error(f"Invalid message length: {message_length}")
+                    break
+                
                 # Receive the actual message
                 message_data = self._recv_all(message_length)
                 if not message_data:
@@ -213,7 +228,21 @@ class BluetoothManager:
                 
                 elif msg_type == 0x02:  # File transfer
                     # Parse filename length (first 4 bytes)
+                    if len(message_data) < 4:
+                        logger.error("File message too short to contain filename length")
+                        break
+                    
                     filename_length = int.from_bytes(message_data[:4], byteorder='big')
+                    
+                    # Validate filename length
+                    if filename_length <= 0 or filename_length > 255:
+                        logger.error(f"Invalid filename length: {filename_length}")
+                        break
+                    
+                    if len(message_data) < 4 + filename_length:
+                        logger.error(f"Message data too short for filename (expected {4 + filename_length}, got {len(message_data)})")
+                        break
+                    
                     filename = message_data[4:4+filename_length].decode('utf-8')
                     file_data = message_data[4+filename_length:]
                     
@@ -292,11 +321,22 @@ class BluetoothManager:
             import os
             filename = os.path.basename(filepath)
             
-            with open(filepath, 'rb') as f:
-                file_data = f.read()
+            # Get file size first
+            file_size = os.path.getsize(filepath)
+            
+            # Read file in chunks for better memory efficiency
+            CHUNK_SIZE = 1024 * 1024  # 1 MB chunks
             
             filename_bytes = filename.encode('utf-8')
             filename_length = len(filename_bytes)
+            
+            # For files larger than 10MB, we should use chunking
+            # For now, read the whole file but log if it's large
+            if file_size > 10 * 1024 * 1024:
+                logger.info(f"Sending large file ({file_size} bytes), this may take a while...")
+            
+            with open(filepath, 'rb') as f:
+                file_data = f.read()
             
             # Construct message: [filename_length:4bytes][filename][file_data]
             message_data = (
@@ -309,7 +349,18 @@ class BluetoothManager:
             
             # Send: [type:1byte][length:4bytes][message_data]
             data = bytes([0x02]) + message_length.to_bytes(4, byteorder='big') + message_data
-            self.client_sock.send(data)
+            
+            # Send data in chunks to avoid overwhelming the socket
+            total_sent = 0
+            while total_sent < len(data):
+                chunk = data[total_sent:total_sent + CHUNK_SIZE]
+                self.client_sock.send(chunk)
+                total_sent += len(chunk)
+                
+                # Log progress for large files
+                if file_size > 10 * 1024 * 1024:
+                    progress = (total_sent / len(data)) * 100
+                    logger.info(f"Progress: {progress:.1f}%")
             
             logger.info(f"Sent file: {filename} ({len(file_data)} bytes)")
             return True
