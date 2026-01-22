@@ -6,11 +6,19 @@ import bluetooth
 import socket
 import threading
 import time
+import re
 from typing import List, Tuple, Optional, Callable
 import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+# Constants for message size limits
+MAX_MESSAGE_SIZE = 100 * 1024 * 1024  # 100 MB for files
+MAX_TEXT_SIZE = 10 * 1024 * 1024  # 10 MB for text messages
+MAX_FILENAME_LENGTH = 255  # Maximum filename length in bytes
+CHUNK_SIZE = 1024 * 1024  # 1 MB chunks for file transfer
 
 
 class BluetoothDevice:
@@ -184,10 +192,6 @@ class BluetoothManager:
     
     def _receive_loop(self):
         """Receive messages from the connected device (runs in a separate thread)."""
-        # Maximum message size: 100 MB for files, 10 MB for text
-        MAX_MESSAGE_SIZE = 100 * 1024 * 1024  # 100 MB
-        MAX_TEXT_SIZE = 10 * 1024 * 1024  # 10 MB
-        
         while self.client_sock:
             try:
                 # Receive message type (1 byte)
@@ -235,7 +239,7 @@ class BluetoothManager:
                     filename_length = int.from_bytes(message_data[:4], byteorder='big')
                     
                     # Validate filename length
-                    if filename_length <= 0 or filename_length > 255:
+                    if filename_length <= 0 or filename_length > MAX_FILENAME_LENGTH:
                         logger.error(f"Invalid filename length: {filename_length}")
                         break
                     
@@ -324,12 +328,6 @@ class BluetoothManager:
             # Get file size first
             file_size = os.path.getsize(filepath)
             
-            # Read file in chunks for better memory efficiency
-            CHUNK_SIZE = 1024 * 1024  # 1 MB chunks
-            
-            filename_bytes = filename.encode('utf-8')
-            filename_length = len(filename_bytes)
-            
             # For files larger than 10MB, we should use chunking
             # For now, read the whole file but log if it's large
             if file_size > 10 * 1024 * 1024:
@@ -374,8 +372,8 @@ class BluetoothManager:
         if self.client_sock:
             try:
                 self.client_sock.close()
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Error closing client socket: {e}")
             self.client_sock = None
         
         self.connected_device = None
@@ -388,8 +386,8 @@ class BluetoothManager:
         if self.server_sock:
             try:
                 self.server_sock.close()
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Error closing server socket: {e}")
             self.server_sock = None
         
         if self.server_thread:

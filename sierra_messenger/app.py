@@ -3,6 +3,7 @@ Main application controller for Sierra Messenger.
 """
 
 import os
+import re
 import time
 from typing import Optional, Callable
 import logging
@@ -79,9 +80,8 @@ class SierraMessenger:
         filename = os.path.basename(filename)
         
         # Remove any potentially dangerous characters
-        # Allow only alphanumeric, dots, dashes, underscores
-        import re
-        filename = re.sub(r'[^\w\-_\. ]', '_', filename)
+        # Allow only alphanumeric, dots, dashes, underscores (no spaces for security)
+        filename = re.sub(r'[^\w\-_\.]', '_', filename)
         
         # Prevent hidden files
         if filename.startswith('.'):

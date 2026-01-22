@@ -51,20 +51,20 @@ class TestMessageStore(unittest.TestCase):
     def setUp(self):
         """Set up test database."""
         from sierra_messenger.message_store import MessageStore, Message
+        import tempfile
+        
         self.MessageStore = MessageStore
         self.Message = Message
         
-        # Use a temporary test database
-        self.test_db = "/tmp/test_messages.db"
-        if os.path.exists(self.test_db):
-            os.remove(self.test_db)
+        # Use tempfile for cross-platform compatibility
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.test_db = os.path.join(self.temp_dir.name, 'test_messages.db')
         
         self.store = MessageStore(self.test_db)
     
     def tearDown(self):
         """Clean up test database."""
-        if os.path.exists(self.test_db):
-            os.remove(self.test_db)
+        self.temp_dir.cleanup()
     
     def test_save_and_retrieve_message(self):
         """Test saving and retrieving a message."""
