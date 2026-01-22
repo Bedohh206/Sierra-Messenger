@@ -20,6 +20,12 @@ A lightweight Bluetooth-based peer-to-peer communication platform designed to sh
 - Bluetooth adapter on your device
 - Linux (recommended) or Windows with Bluetooth support
 
+### Python Dependencies
+
+- **PyBluez** 0.23 - Bluetooth connectivity
+- **Pillow** >= 10.3.0 - Image processing (with security fixes)
+- **cryptography** >= 42.0.4 - Security utilities (with security fixes)
+
 ### System Dependencies
 
 **On Ubuntu/Debian:**

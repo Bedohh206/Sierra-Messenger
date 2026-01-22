@@ -26,8 +26,8 @@ setup(
     python_requires=">=3.8",
     install_requires=[
         "PyBluez>=0.23",
-        "Pillow>=10.1.0",
-        "cryptography>=41.0.7",
+        "Pillow>=10.3.0",
+        "cryptography>=42.0.4",
     ],
     entry_points={
         "console_scripts": [
