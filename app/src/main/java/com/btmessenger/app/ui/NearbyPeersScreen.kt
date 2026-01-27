@@ -428,8 +428,17 @@ fun NearbyPeersScreen(
                             style = MaterialTheme.typography.bodyMedium
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                        Button(onClick = { permissionsState.launchMultiplePermissionRequest() }) {
-                            Text("Grant Permissions")
+                        Row {
+                            Button(onClick = { permissionsState.launchMultiplePermissionRequest() }) {
+                                Text("Grant Permissions")
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            val activity = LocalContext.current as? android.app.Activity
+                            OutlinedButton(onClick = {
+                                activity?.let { com.btmessenger.app.permission.PermissionHelper.requestBluetoothPermissions(it, com.btmessenger.app.permission.PermissionHelper.REQUEST_BLUETOOTH_PERMS) }
+                            }) {
+                                Text("Request via System")
+                            }
                         }
                     }
                 }

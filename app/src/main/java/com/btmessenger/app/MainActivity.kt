@@ -1,6 +1,8 @@
 package com.btmessenger.app
 
 import android.os.Bundle
+import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,10 +21,18 @@ import com.btmessenger.app.ui.GroupChatScreen
 import com.btmessenger.app.ui.NearbyPeersScreen
 import com.btmessenger.app.ui.theme.BluetoothMessengerTheme
 import com.google.gson.Gson
+import com.btmessenger.app.permission.PermissionHelper
 
 class MainActivity : ComponentActivity() {
+    private val tag = "MainActivity"
+    private val REQUEST_BLUETOOTH_PERMS = 1234
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        if (!PermissionHelper.hasBluetoothPermissions(this)) {
+            Log.d(tag, "Requesting Bluetooth permissions")
+            PermissionHelper.requestBluetoothPermissions(this, REQUEST_BLUETOOTH_PERMS)
+        }
         setContent {
             BluetoothMessengerTheme {
                 Surface(
@@ -31,6 +41,18 @@ class MainActivity : ComponentActivity() {
                 ) {
                     MessengerApp()
                 }
+            }
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_BLUETOOTH_PERMS) {
+            if (PermissionHelper.hasBluetoothPermissions(this)) {
+                Log.d(tag, "Bluetooth permissions granted")
+            } else {
+                Log.w(tag, "Bluetooth permissions denied")
+                Toast.makeText(this, "Bluetooth permissions are required for nearby features", Toast.LENGTH_LONG).show()
             }
         }
     }
