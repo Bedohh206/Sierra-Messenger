@@ -12,14 +12,15 @@ import com.btmessenger.app.data.entities.Peer
 import com.btmessenger.app.data.entities.Group
 
 @Database(
-    entities = [Peer::class, Message::class, Group::class],
-    version = 3,
+    entities = [Peer::class, Message::class, Group::class, com.btmessenger.app.data.entities.Friend::class],
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun peerDao(): PeerDao
     abstract fun messageDao(): MessageDao
     abstract fun groupDao(): GroupDao
+    abstract fun friendDao(): com.btmessenger.app.data.dao.FriendDao
     
     companion object {
         @Volatile

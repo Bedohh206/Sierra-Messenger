@@ -71,3 +71,12 @@ To create `KEYSTORE_BASE64` on Windows (PowerShell):
 ```
 
 Paste that output into the `KEYSTORE_BASE64` secret value. The workflow will decode the keystore, write `keystore.properties`, and run `./gradlew :app:bundleRelease`, then upload `app-release.aab` as a workflow artifact.
+
+Invite / Friends flow
+
+- The app supports an invite-based friends list to restrict interactions:
+  - Inviting: a discovered peer may be added as a friend locally by tapping "Invite" on the Nearby Devices screen. This creates a local `Friend` entry containing `id`, `name`, and `address`.
+  - Enforcement: incoming GATT messages are only accepted and emitted by the app if the sender's Bluetooth address matches an entry in the local friends table.
+  - Scope: invites are currently handled locally (no cloud sync). For cross-device or remote invites a backend will be required.
+
+Ensure your Play Store listing makes clear that the app uses Bluetooth for nearby discovery, that it does not share precise GPS location, and that interactions can be limited to invited friends via a local friend list.

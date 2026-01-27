@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 /**
  * GATT Server for receiving connections and messages
  */
-class GattServer(private val context: Context) {
+class GattServer(private val context: Context, private val friendDao: com.btmessenger.app.data.dao.FriendDao? = null) {
     
     private val tag = "GattServer"
     private val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
@@ -66,9 +66,25 @@ class GattServer(private val context: Context) {
                 value?.let {
                     val message = String(it, Charsets.UTF_8)
                     Log.d(tag, "Received message: $message")
-                    
-                    // Emit the received message without launching a coroutine (non-suspending)
-                    _receivedMessages.tryEmit(message)
+
+                    // If friendDao provided, verify sender address is a friend before emitting
+                    val senderAddress = device?.address ?: ""
+                    if (friendDao != null) {
+                        kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                            try {
+                                val f = friendDao.getFriendByAddress(senderAddress)
+                                if (f != null) {
+                                    _receivedMessages.tryEmit(message)
+                                } else {
+                                    Log.d(tag, "Rejected message from non-friend: $senderAddress")
+                                }
+                            } catch (e: Exception) {
+                                Log.e(tag, "Error checking friend status", e)
+                            }
+                        }
+                    } else {
+                        _receivedMessages.tryEmit(message)
+                    }
                 }
                 
                 if (responseNeeded) {

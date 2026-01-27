@@ -10,7 +10,8 @@ import kotlinx.coroutines.flow.Flow
 class MessengerRepository(
     private val peerDao: PeerDao,
     private val messageDao: MessageDao,
-    private val groupDao: GroupDao
+    private val groupDao: GroupDao,
+    private val friendDao: com.btmessenger.app.data.dao.FriendDao
 ) {
     // Peer operations
     fun getAllPeers(): Flow<List<Peer>> = peerDao.getAllPeers()
@@ -55,4 +56,15 @@ class MessengerRepository(
     suspend fun deleteGroup(group: com.btmessenger.app.data.entities.Group) = groupDao.deleteGroup(group)
 
     fun getMessagesForGroup(groupId: String) = messageDao.getMessagesForGroup(groupId)
+
+    // Friend operations
+    fun getAllFriends() = friendDao.getAllFriends()
+
+    suspend fun getFriendById(friendId: String) = friendDao.getFriendById(friendId)
+
+    suspend fun getFriendByAddress(address: String) = friendDao.getFriendByAddress(address)
+
+    suspend fun insertFriend(friend: com.btmessenger.app.data.entities.Friend) = friendDao.insertFriend(friend)
+
+    suspend fun deleteFriend(friend: com.btmessenger.app.data.entities.Friend) = friendDao.deleteFriend(friend)
 }

@@ -83,6 +83,15 @@ jobs:
             echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_ENV
           fi
 
+      - name: Set release metadata
+        if: success()
+        run: |
+          # short commit SHA (first 7 chars) and branch name for release naming
+          SHORT_SHA=${GITHUB_SHA::7}
+          BRANCH=${GITHUB_REF#refs/heads/}
+          echo "SHORT_SHA=$SHORT_SHA" >> $GITHUB_ENV
+          echo "BRANCH=$BRANCH" >> $GITHUB_ENV
+
       - name: Create GitHub Release
         id: create_release
         if: success()
@@ -90,9 +99,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
-          tag_name: v${{ env.VERSION_NAME }}-build-${{ github.run_number }}
-          release_name: Release ${{ env.VERSION_NAME }} (build ${{ github.run_number }})
-          body: Automated build ${{ github.run_number }} (version ${{ env.VERSION_NAME }})
+          tag_name: v${{ env.VERSION_NAME }}-${{ env.SHORT_SHA }}-build-${{ github.run_number }}
+          release_name: Release ${{ env.VERSION_NAME }} (${{ env.SHORT_SHA }} build ${{ github.run_number }})
+          body: |
+            Automated build ${{ github.run_number }}
+            - Version: ${{ env.VERSION_NAME }}
+            - Commit: ${{ env.SHORT_SHA }}
+            - Branch: ${{ env.BRANCH }}
           draft: false
           prerelease: true
 

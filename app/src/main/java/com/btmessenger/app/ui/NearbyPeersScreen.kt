@@ -41,10 +41,10 @@ fun NearbyPeersScreen(
     // Bluetooth components
     val bleScanner = remember { BleScanner(context) }
     val bleAdvertiser = remember { BleAdvertiser(context) }
-    val gattServer = remember { GattServer(context) }
+    val gattServer = remember { GattServer(context, database.friendDao()) }
     val database = remember { com.btmessenger.app.data.AppDatabase.getDatabase(context) }
     val classicServer = remember { ClassicServer(context, android.os.Build.MODEL, database.groupDao()) }
-    val repository = remember { MessengerRepository(database.peerDao(), database.messageDao(), database.groupDao()) }
+    val repository = remember { MessengerRepository(database.peerDao(), database.messageDao(), database.groupDao(), database.friendDao()) }
 
     var showGroups by remember { mutableStateOf(false) }
     val classicClient = remember { ClassicClient(context) }
@@ -530,8 +530,19 @@ fun NearbyPeersScreen(
                     modifier = Modifier.fillMaxSize()
                 ) {
                     items(discoveredPeers) { peer ->
+                        // determine if peer is a friend
+                        val friends by repository.getAllFriends().collectAsState(initial = emptyList())
+                        val isFriend = friends.any { it.id == peer.id }
+
                         PeerItem(
                             peer = peer,
+                            isFriend = isFriend,
+                            onInvite = {
+                                scope.launch {
+                                    val f = com.btmessenger.app.data.entities.Friend(id = peer.id, name = peer.name, address = peer.address)
+                                    repository.insertFriend(f)
+                                }
+                            },
                             onClick = { onPeerSelected(peer) }
                         )
                     }
@@ -584,6 +595,8 @@ fun StatusChip(
 @Composable
 fun PeerItem(
     peer: Peer,
+    isFriend: Boolean = false,
+    onInvite: () -> Unit = {},
     onClick: () -> Unit
 ) {
     Card(
@@ -624,6 +637,16 @@ fun PeerItem(
                     )
                 }
             }
+            if (isFriend) {
+                Button(onClick = { /* maybe show friend actions later */ }) {
+                    Text("Friend")
+                }
+            } else {
+                OutlinedButton(onClick = onInvite) {
+                    Text("Invite")
+                }
+            }
+            Spacer(modifier = Modifier.width(8.dp))
             Icon(
                 imageVector = Icons.Default.ChevronRight,
                 contentDescription = null,
