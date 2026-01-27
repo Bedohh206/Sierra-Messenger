@@ -21,6 +21,7 @@
 
 # Local config
 local.properties
+keystore.properties
 
 # Misc
 *.apk

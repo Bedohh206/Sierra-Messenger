@@ -1,14 +1,12 @@
 package com.btmessenger.app.bluetooth
 
-import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.*
 import android.bluetooth.BluetoothGattCharacteristic.*
 import android.bluetooth.BluetoothGattService.SERVICE_TYPE_PRIMARY
 import android.content.Context
-import android.content.pm.PackageManager
 import android.util.Log
-import androidx.core.app.ActivityCompat
+import com.btmessenger.app.permission.PermissionHelper
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -102,6 +100,11 @@ class GattServer(private val context: Context) {
     
     @SuppressLint("MissingPermission")
     fun startServer(): Boolean {
+        if (!isBluetoothEnabled()) {
+            Log.e(tag, "Bluetooth adapter is null or disabled")
+            return false
+        }
+
         if (!hasRequiredPermissions()) {
             Log.e(tag, "Missing Bluetooth permissions")
             return false
@@ -163,9 +166,11 @@ class GattServer(private val context: Context) {
     }
     
     private fun hasRequiredPermissions(): Boolean {
-        return ActivityCompat.checkSelfPermission(
-            context,
-            Manifest.permission.BLUETOOTH_CONNECT
-        ) == PackageManager.PERMISSION_GRANTED
+        return PermissionHelper.hasBluetoothPermissions(context)
+    }
+
+    private fun isBluetoothEnabled(): Boolean {
+        val adapter = bluetoothManager.adapter
+        return adapter != null && adapter.isEnabled
     }
 }
