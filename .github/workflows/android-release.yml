@@ -45,14 +45,12 @@ jobs:
           keyPassword=${{ secrets.KEY_PASSWORD }}
           EOF
 
-      # ✅ FIX for exit code 126 (Permission denied)
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
 
       - name: Build Release AAB
         run: ./gradlew :app:bundleRelease --no-daemon --stacktrace --info
 
-      # Always upload outputs for debugging (even if build fails)
       - name: Upload build outputs (always)
         if: always()
         uses: actions/upload-artifact@v4
@@ -89,8 +87,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
-          tag_name: v${{ env.VERSION_NAME }}
-          release_name: Release ${{ env.VERSION_NAME }}
+          tag_name: v${{ env.VERSION_NAME }}-build-${{ github.run_number }}
+          release_name: Release ${{ env.VERSION_NAME }} (build ${{ github.run_number }})
           body: Automated build ${{ github.run_number }} (version ${{ env.VERSION_NAME }})
           draft: false
           prerelease: true
