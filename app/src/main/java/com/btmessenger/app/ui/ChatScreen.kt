@@ -53,6 +53,9 @@ fun ChatScreen(
     
 // Database
 val database = remember { AppDatabase.getDatabase(context) }
+val database = remember { AppDatabase.getDatabase(context) }
+val friendDao = remember { database.friendDao() }
+
 val repository = remember {
     MessengerRepository(
         database.peerDao(),
@@ -61,6 +64,7 @@ val repository = remember {
         friendDao
     )
 }
+
 
 val repository = remember {
     // IMPORTANT: use the same constructor signature you use elsewhere.
