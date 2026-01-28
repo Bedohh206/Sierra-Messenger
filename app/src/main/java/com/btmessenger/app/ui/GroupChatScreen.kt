@@ -32,14 +32,12 @@ fun GroupChatScreen(
     val database = remember { AppDatabase.getDatabase(context) }
     val friendDao = remember { database.friendDao() }
 
-   val repository = remember {
-    MessengerRepository(
-        database.peerDao(),
-        database.messageDao(),
-        database.groupDao(),
-        friendDao
-    )
-}
+   val database = remember { AppDatabase.getDatabase(context) }
+   val friendDao = remember { database.friendDao() }
+   val repository = remember { MessengerRepository(database.peerDao(), database.messageDao(), database.groupDao(), friendDao) }
+
+   val classicClient = remember { ClassicClient(context) }
+val gattClient = remember { GattClient(context, friendDao = friendDao) }
 
     // If your project still uses/creates clients here, pass friendDao to GattClient.
     // (Even if unused, this prevents the "No value passed for parameter 'friendDao'" error.)
