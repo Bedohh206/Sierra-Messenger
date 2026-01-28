@@ -41,12 +41,17 @@ fun GroupChatScreen(
         )
     }
 
+    // ✅ If you still need it in this screen
+    val gattClient = remember { GattClient(context, friendDao = friendDao) }
+
     // ✅ Messages stream
     val messages by repository.getMessagesForGroup(groupId)
         .collectAsState(initial = emptyList())
 
     var text by remember { mutableStateOf("") }
 
+    // ...keep the rest of your Scaffold/UI here...
+}
     Scaffold(
         topBar = {
             TopAppBar(
