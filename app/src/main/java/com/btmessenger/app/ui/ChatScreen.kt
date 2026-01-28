@@ -51,16 +51,21 @@ fun ChatScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     
-    // Database
+// Database
 val database = remember { AppDatabase.getDatabase(context) }
 val friendDao = remember { database.friendDao() }
+
 val repository = remember {
+    // IMPORTANT: use the same constructor signature you use elsewhere.
+    // If your MessengerRepository takes friendDao as the 4th param, pass it here.
     MessengerRepository(
         database.peerDao(),
         database.messageDao(),
-        database.groupDao()
+        database.groupDao(),
+        friendDao
     )
 }
+
 
     // Bluetooth
     val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
