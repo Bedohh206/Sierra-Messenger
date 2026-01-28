@@ -22,9 +22,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.btmessenger.app.bluetooth.*
 import com.btmessenger.app.data.AppDatabase
+import com.btmessenger.app.data.entities.Friend
 import com.btmessenger.app.data.entities.Group
 import com.btmessenger.app.data.entities.Peer
-import com.btmessenger.app.data.entities.Friend
 import com.btmessenger.app.data.repository.MessengerRepository
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
@@ -40,19 +40,20 @@ fun NearbyPeersScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-   // ✅ Database / DAOs
-val database = remember { AppDatabase.getDatabase(context) }
-val friendDao = remember { database.friendDao() }
+    // ✅ Database / DAOs
+    val database = remember { AppDatabase.getDatabase(context) }
+    val friendDao = remember { database.friendDao() }
+    val groupDao = remember { database.groupDao() }
 
-// ✅ Repository (use the constructor that includes friendDao)
-val repository = remember {
-    MessengerRepository(
-        database.peerDao(),
-        database.messageDao(),
-        database.groupDao(),
-        friendDao
-    )
-}
+    // ✅ Repository
+    val repository = remember {
+        MessengerRepository(
+            database.peerDao(),
+            database.messageDao(),
+            database.groupDao(),
+            friendDao
+        )
+    }
 
     // ✅ Bluetooth components
     val bleScanner = remember { BleScanner(context) }
@@ -72,8 +73,6 @@ val repository = remember {
     val isAdvertising by bleAdvertiser.isAdvertising.collectAsState()
     val discoveredPeers by bleScanner.discoveredPeers.collectAsState()
     val groups by repository.getAllGroups().collectAsState(initial = emptyList())
-
-    // ✅ Collect friends ONCE (not inside LazyColumn rows)
     val friends by repository.getAllFriends().collectAsState(initial = emptyList())
 
     // Permissions
@@ -93,14 +92,17 @@ val repository = remember {
     val permissionsState = rememberMultiplePermissionsState(permissionsList)
 
     // Bluetooth enable launcher
-    val bluetoothManager =
-        context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+    val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     val bluetoothAdapter = bluetoothManager.adapter
     val enableBluetoothLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { }
 
     val isBluetoothEnabled = bluetoothAdapter?.isEnabled == true
+
+    // ✅ KEEP YOUR EXISTING Scaffold/UI CODE BELOW THIS LINE
+    ...
+}
 
     Scaffold(
         topBar = {
