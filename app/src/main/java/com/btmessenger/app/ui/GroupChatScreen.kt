@@ -12,12 +12,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.btmessenger.app.bluetooth.*
+import com.btmessenger.app.bluetooth.Protocol
 import com.btmessenger.app.data.AppDatabase
 import com.btmessenger.app.data.entities.Message
 import com.btmessenger.app.data.repository.MessengerRepository
 import kotlinx.coroutines.launch
-import java.util.*
+import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -27,15 +27,25 @@ fun GroupChatScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+
+    // Database
     val database = remember { AppDatabase.getDatabase(context) }
-    val repository = remember { MessengerRepository(database.peerDao(), database.messageDao(), database.groupDao()) }
+    val friendDao = remember { database.friendDao() }
+    val repository = remember {
+        MessengerRepository(
+            database.peerDao(),
+            database.messageDao(),
+            database.groupDao()
+        )
+    }
 
-    val messages by repository.getMessagesForGroup(groupId).collectAsState(initial = emptyList())
+    // If your project still uses/creates clients here, pass friendDao to GattClient.
+    // (Even if unused, this prevents the "No value passed for parameter 'friendDao'" error.)
+    remember { com.btmessenger.app.bluetooth.GattClient(context, friendDao = friendDao) }
+    remember { com.btmessenger.app.bluetooth.ClassicClient(context) }
 
-    val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as android.bluetooth.BluetoothManager
-    val bluetoothAdapter = bluetoothManager.adapter
-    val classicClient = remember { ClassicClient(context) }
-    val gattClient = remember { GattClient(context) }
+    val messages by repository.getMessagesForGroup(groupId)
+        .collectAsState(initial = emptyList())
 
     var text by remember { mutableStateOf("") }
 
@@ -44,16 +54,21 @@ fun GroupChatScreen(
             TopAppBar(
                 title = { Text("Group: ${groupId.take(12)}") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    }
                 }
             )
         },
         bottomBar = {
             Surface(shadowElevation = 8.dp) {
-                Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.padding(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     OutlinedTextField(
                         value = text,
-                        onValueChange = { text = it },
+                        onTextChange = { text = it },
                         modifier = Modifier.weight(1f),
                         placeholder = { Text("Message") }
                     )
@@ -63,6 +78,7 @@ fun GroupChatScreen(
                         scope.launch {
                             val msgId = UUID.randomUUID().toString()
                             val deviceId = android.os.Build.MODEL
+
                             val entity = Message(
                                 msgId = msgId,
                                 type = Protocol.TYPE_GROUP_MESSAGE,
@@ -76,9 +92,9 @@ fun GroupChatScreen(
                             )
                             repository.insertMessage(entity)
 
-                            val json = Protocol.createGroupTextMessage(msgId, deviceId, groupId, text)
-                            // Broadcasting of group messages is handled elsewhere (NearbyPeersScreen)
-                            // Here we only persist the message; avoid scanning or composable calls.
+                            // You said broadcasting happens elsewhere; keep it that way.
+                            // val json = Protocol.createGroupTextMessage(msgId, deviceId, groupId, text)
+
                             text = ""
                         }
                     }) { Text("Send") }
@@ -86,12 +102,20 @@ fun GroupChatScreen(
             }
         }
     ) { padding ->
-        LazyColumn(modifier = Modifier.padding(padding).fillMaxSize()) {
+        LazyColumn(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+        ) {
             items(messages) { m ->
                 Column(modifier = Modifier.padding(8.dp)) {
                     Text(m.fromId, style = MaterialTheme.typography.labelSmall)
                     Text(m.body ?: "", style = MaterialTheme.typography.bodyLarge)
-                    Text(java.text.SimpleDateFormat.getDateTimeInstance().format(java.util.Date(m.timestamp)), style = MaterialTheme.typography.labelSmall)
+                    Text(
+                        java.text.SimpleDateFormat.getDateTimeInstance()
+                            .format(java.util.Date(m.timestamp)),
+                        style = MaterialTheme.typography.labelSmall
+                    )
                 }
             }
         }
