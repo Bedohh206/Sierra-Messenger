@@ -27,19 +27,18 @@ fun GroupChatScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    // ✅ Database / DAOs
-    val database = remember { AppDatabase.getDatabase(context) }
-    val friendDao = remember { database.friendDao() }
+    // Database
+val database = remember { AppDatabase.getDatabase(context) }
+val friendDao = remember { database.friendDao() }
 
-    // ✅ Repository (4-arg constructor including friendDao)
-    val repository = remember {
-        MessengerRepository(
-            database.peerDao(),
-            database.messageDao(),
-            database.groupDao(),
-            friendDao
-        )
-    }
+val repository = remember {
+    MessengerRepository(
+        database.peerDao(),
+        database.messageDao(),
+        database.groupDao(),
+        friendDao
+    )
+}
 
     // ✅ If you still need it in this screen
     val gattClient = remember { GattClient(context, friendDao = friendDao) }
