@@ -11,6 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.btmessenger.app.bluetooth.GattClient
 import com.btmessenger.app.bluetooth.Protocol
 import com.btmessenger.app.data.AppDatabase
 import com.btmessenger.app.data.entities.Message
@@ -27,35 +28,31 @@ fun GroupChatScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    // Database (remember so it doesn't recreate on recomposition)
+    // ✅ Database / DAOs
     val database = remember { AppDatabase.getDatabase(context) }
     val friendDao = remember { database.friendDao() }
 
-    // Repository (stable instance)
+    // ✅ Repository (PASS friendDao as 4th arg — this fixes your build error)
     val repository = remember {
         MessengerRepository(
-            peerDao = database.peerDao(),
-            messageDao = database.messageDao(),
-            groupDao = database.groupDao(),
-            friendDao = friendDao
+            database.peerDao(),
+            database.messageDao(),
+            database.groupDao(),
+            friendDao
         )
     }
 
-    // Optional: GATT client (only if needed for sending messages)
+    // ✅ Optional (safe): prevents "No value passed for parameter friendDao" if your ctor requires it
+    // If you don't use it here, it's still fine to keep.
     val gattClient = remember { GattClient(context, friendDao = friendDao) }
 
-    // Messages stream (Compose-friendly)
-    val messages by repository
-        .getMessagesForGroup(groupId)
+    // ✅ Messages stream
+    val messages by repository.getMessagesForGroup(groupId)
         .collectAsState(initial = emptyList())
 
-    // Text field state
+    // ✅ Input state
     var text by remember { mutableStateOf("") }
 
-    // ---------------------------------------------------------
-    // Your Scaffold / UI goes below this point
-    // ---------------------------------------------------------
-}
     Scaffold(
         topBar = {
             TopAppBar(
@@ -77,7 +74,7 @@ fun GroupChatScreen(
                 ) {
                     OutlinedTextField(
                         value = text,
-                        onValueChange = { text = it },   // ✅ correct callback
+                        onValueChange = { text = it },
                         modifier = Modifier.weight(1f),
                         placeholder = { Text("Message") }
                     )
@@ -100,14 +97,15 @@ fun GroupChatScreen(
                                     status = "sent",
                                     isIncoming = false
                                 )
-
                                 repository.insertMessage(entity)
 
-                                // Broadcasting handled elsewhere (keep as you said)
+                                // Broadcasting handled elsewhere (as you said)
                                 text = ""
                             }
                         }
-                    ) { Text("Send") }
+                    ) {
+                        Text("Send")
+                    }
                 }
             }
         }
