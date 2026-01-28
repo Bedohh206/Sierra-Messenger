@@ -38,31 +38,30 @@ fun NearbyPeersScreen(
     onGroupSelected: (String) -> Unit
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
+val scope = rememberCoroutineScope()
 
-    // ✅ Database / DAOs
-    val database = remember { AppDatabase.getDatabase(context) }
-    val friendDao = remember { database.friendDao() }
-    val groupDao = remember { database.groupDao() }
+// Database first
+val database = remember { AppDatabase.getDatabase(context) }
+val friendDao = remember { database.friendDao() }
+val groupDao = remember { database.groupDao() }
 
-    // ✅ Repository
-    val repository = remember {
-        MessengerRepository(
-            database.peerDao(),
-            database.messageDao(),
-            database.groupDao(),
-            friendDao
-        )
-    }
+val repository = remember {
+    MessengerRepository(
+        database.peerDao(),
+        database.messageDao(),
+        database.groupDao(),
+        friendDao
+    )
+}
 
-    // ✅ Bluetooth components
-    val bleScanner = remember { BleScanner(context) }
-    val bleAdvertiser = remember { BleAdvertiser(context) }
-    val gattServer = remember { GattServer(context, friendDao) }
-    val classicServer = remember { ClassicServer(context, android.os.Build.MODEL, groupDao) }
+// Bluetooth components (AFTER database exists)
+val bleScanner = remember { BleScanner(context) }
+val bleAdvertiser = remember { BleAdvertiser(context) }
+val gattServer = remember { GattServer(context, friendDao) }
+val classicServer = remember { ClassicServer(context, android.os.Build.MODEL, groupDao) }
 
-    val classicClient = remember { ClassicClient(context) }
-    val gattClient = remember { GattClient(context, friendDao = friendDao) }
+val classicClient = remember { ClassicClient(context) }
+val gattClient = remember { GattClient(context, friendDao = friendDao) }
 
     // ✅ UI state
     var showGroupsDialog by remember { mutableStateOf(false) }
