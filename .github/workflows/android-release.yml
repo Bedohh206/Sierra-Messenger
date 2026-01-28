@@ -21,16 +21,11 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+          cache: gradle
 
-      - name: Restore Gradle cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+      # Ensure Gradle wrapper can run on Linux (fixes exit code 126)
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
 
       - name: Decode keystore from secret
         env:
@@ -38,6 +33,7 @@ jobs:
         run: |
           mkdir -p keystore
           echo "$KEYSTORE_BASE64" | base64 --decode > keystore/my-release-key.jks
+          ls -la keystore
 
       - name: Write keystore.properties
         run: |
@@ -47,13 +43,13 @@ jobs:
           keyAlias=${{ secrets.KEY_ALIAS }}
           keyPassword=${{ secrets.KEY_PASSWORD }}
           EOF
+          echo "keystore.properties written"
 
-      - name: Make Gradle wrapper executable
-        run: chmod +x ./gradlew
-
+      # Build the signed release bundle
       - name: Build Release AAB
-        run: ./gradlew :app:bundleRelease --no-daemon --stacktrace --info
+        run: ./gradlew :app:bundleRelease --no-daemon --stacktrace
 
+      # Always upload outputs for debugging
       - name: Upload build outputs (always)
         if: always()
         uses: actions/upload-artifact@v4
@@ -64,6 +60,7 @@ jobs:
             app/build/reports/**
           if-no-files-found: ignore
 
+      # Upload AAB (if it exists)
       - name: Upload AAB artifact (if present)
         if: always()
         uses: actions/upload-artifact@v4
@@ -72,23 +69,33 @@ jobs:
           path: app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: ignore
 
+      # Get versionName safely
       - name: Get versionName
         id: get_version
         if: success()
+        shell: bash
         run: |
-          VERSION_NAME=$(grep -Po 'versionName\s*=\s*"(.*?)"' app/build.gradle.kts | sed -E 's/.*"(.+)".*/\1/')
-          if [ -z "$VERSION_NAME" ]; then
-            echo "VERSION_NAME=unknown" >> $GITHUB_ENV
+          if [ -f "app/build.gradle.kts" ]; then
+            VERSION_NAME=$(grep -Po 'versionName\s*=\s*"(.*?)"' app/build.gradle.kts | sed -E 's/.*"(.+)".*/\1/' | head -n 1)
+          elif [ -f "app/build.gradle" ]; then
+            VERSION_NAME=$(grep -Po 'versionName\s+"(.*?)"' app/build.gradle | sed -E 's/.*"(.+)".*/\1/' | head -n 1)
           else
-            echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_ENV
+            VERSION_NAME=""
           fi
+
+          if [ -z "$VERSION_NAME" ]; then
+            VERSION_NAME="unknown"
+          fi
+
+          echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_ENV
+          echo "Detected VERSION_NAME=$VERSION_NAME"
 
       - name: Set release metadata
         if: success()
+        shell: bash
         run: |
-          # short commit SHA (first 7 chars) and branch name for release naming
-          SHORT_SHA=${GITHUB_SHA::7}
-          BRANCH=${GITHUB_REF#refs/heads/}
+          SHORT_SHA="${GITHUB_SHA::7}"
+          BRANCH="${GITHUB_REF#refs/heads/}"
           echo "SHORT_SHA=$SHORT_SHA" >> $GITHUB_ENV
           echo "BRANCH=$BRANCH" >> $GITHUB_ENV
 
