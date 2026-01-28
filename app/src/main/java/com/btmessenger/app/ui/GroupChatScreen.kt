@@ -27,29 +27,34 @@ fun GroupChatScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    // Database
-val database = remember { AppDatabase.getDatabase(context) }
-val friendDao = remember { database.friendDao() }
+    // Database (remember so it doesn't recreate on recomposition)
+    val database = remember { AppDatabase.getDatabase(context) }
+    val friendDao = remember { database.friendDao() }
 
-val repository = remember {
-    MessengerRepository(
-        database.peerDao(),
-        database.messageDao(),
-        database.groupDao(),
-        friendDao
-    )
-}
+    // Repository (stable instance)
+    val repository = remember {
+        MessengerRepository(
+            peerDao = database.peerDao(),
+            messageDao = database.messageDao(),
+            groupDao = database.groupDao(),
+            friendDao = friendDao
+        )
+    }
 
-    // ✅ If you still need it in this screen
+    // Optional: GATT client (only if needed for sending messages)
     val gattClient = remember { GattClient(context, friendDao = friendDao) }
 
-    // ✅ Messages stream
-    val messages by repository.getMessagesForGroup(groupId)
+    // Messages stream (Compose-friendly)
+    val messages by repository
+        .getMessagesForGroup(groupId)
         .collectAsState(initial = emptyList())
 
+    // Text field state
     var text by remember { mutableStateOf("") }
 
-    // ...keep the rest of your Scaffold/UI here...
+    // ---------------------------------------------------------
+    // Your Scaffold / UI goes below this point
+    // ---------------------------------------------------------
 }
     Scaffold(
         topBar = {
