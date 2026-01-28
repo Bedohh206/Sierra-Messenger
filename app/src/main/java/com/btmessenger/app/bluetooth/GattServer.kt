@@ -6,7 +6,13 @@ import android.bluetooth.BluetoothGattCharacteristic.*
 import android.bluetooth.BluetoothGattService.SERVICE_TYPE_PRIMARY
 import android.content.Context
 import android.util.Log
+import com.btmessenger.app.data.dao.FriendDao
 import com.btmessenger.app.permission.PermissionHelper
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -15,24 +21,35 @@ import kotlinx.coroutines.flow.StateFlow
 /**
  * GATT Server for receiving connections and messages
  */
-class GattServer(private val context: Context, private val friendDao: com.btmessenger.app.data.dao.FriendDao? = null) {
-    
+class GattServer(
+    private val context: Context,
+    private val friendDao: FriendDao? = null
+) {
+
     private val tag = "GattServer"
-    private val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+
+    // Dedicated scope for background checks (no GlobalScope)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    private val bluetoothManager =
+        context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+
     private var gattServer: BluetoothGattServer? = null
-    
+
     private val _isRunning = MutableStateFlow(false)
     val isRunning: StateFlow<Boolean> = _isRunning
-    
-    private val _receivedMessages = MutableSharedFlow<String>()
+
+    private val _receivedMessages = MutableSharedFlow<String>(extraBufferCapacity = 16)
     val receivedMessages: SharedFlow<String> = _receivedMessages
-    
+
     private val connectedDevices = mutableSetOf<BluetoothDevice>()
-    
+
     private val gattServerCallback = object : BluetoothGattServerCallback() {
+
         @SuppressLint("MissingPermission")
         override fun onConnectionStateChange(device: BluetoothDevice?, status: Int, newState: Int) {
             super.onConnectionStateChange(device, status, newState)
+
             device?.let {
                 when (newState) {
                     BluetoothProfile.STATE_CONNECTED -> {
@@ -43,13 +60,10 @@ class GattServer(private val context: Context, private val friendDao: com.btmess
                         connectedDevices.remove(it)
                         Log.d(tag, "Device disconnected: ${it.address}")
                     }
-                    else -> {
-                        // Other states ignored
-                    }
                 }
             }
         }
-        
+
         @SuppressLint("MissingPermission")
         override fun onCharacteristicWriteRequest(
             device: BluetoothDevice?,
@@ -60,39 +74,39 @@ class GattServer(private val context: Context, private val friendDao: com.btmess
             offset: Int,
             value: ByteArray?
         ) {
-            super.onCharacteristicWriteRequest(device, requestId, characteristic, preparedWrite, responseNeeded, offset, value)
-            
-            if (characteristic?.uuid == Protocol.MESSAGE_CHARACTERISTIC_UUID) {
-                value?.let {
-                    val message = String(it, Charsets.UTF_8)
-                    Log.d(tag, "Received message: $message")
+            super.onCharacteristicWriteRequest(
+                device, requestId, characteristic, preparedWrite, responseNeeded, offset, value
+            )
 
-                    // If friendDao provided, verify sender address is a friend before emitting
-                    val senderAddress = device?.address ?: ""
-                    if (friendDao != null) {
-                        kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                            try {
-                                val f = friendDao.getFriendByAddress(senderAddress)
-                                if (f != null) {
-                                    _receivedMessages.tryEmit(message)
-                                } else {
-                                    Log.d(tag, "Rejected message from non-friend: $senderAddress")
-                                }
-                            } catch (e: Exception) {
-                                Log.e(tag, "Error checking friend status", e)
+            if (characteristic?.uuid == Protocol.MESSAGE_CHARACTERISTIC_UUID) {
+                val message = value?.toString(Charsets.UTF_8).orEmpty()
+                val senderAddress = device?.address.orEmpty()
+
+                Log.d(tag, "Received message: $message")
+
+                if (friendDao != null && senderAddress.isNotEmpty()) {
+                    scope.launch {
+                        try {
+                            val friend = friendDao.getFriendByAddress(senderAddress)
+                            if (friend != null) {
+                                _receivedMessages.tryEmit(message)
+                            } else {
+                                Log.d(tag, "Rejected message from non-friend: $senderAddress")
                             }
+                        } catch (e: Exception) {
+                            Log.e(tag, "Error checking friend status", e)
                         }
-                    } else {
-                        _receivedMessages.tryEmit(message)
                     }
+                } else {
+                    _receivedMessages.tryEmit(message)
                 }
-                
+
                 if (responseNeeded) {
                     gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, 0, null)
                 }
             }
         }
-        
+
         @SuppressLint("MissingPermission")
         override fun onCharacteristicReadRequest(
             device: BluetoothDevice?,
@@ -101,7 +115,7 @@ class GattServer(private val context: Context, private val friendDao: com.btmess
             characteristic: BluetoothGattCharacteristic?
         ) {
             super.onCharacteristicReadRequest(device, requestId, offset, characteristic)
-            
+
             if (characteristic?.uuid == Protocol.MESSAGE_CHARACTERISTIC_UUID) {
                 gattServer?.sendResponse(
                     device,
@@ -113,7 +127,7 @@ class GattServer(private val context: Context, private val friendDao: com.btmess
             }
         }
     }
-    
+
     @SuppressLint("MissingPermission")
     fun startServer(): Boolean {
         if (!isBluetoothEnabled()) {
@@ -125,65 +139,60 @@ class GattServer(private val context: Context, private val friendDao: com.btmess
             Log.e(tag, "Missing Bluetooth permissions")
             return false
         }
-        
-        try {
+
+        return try {
             gattServer = bluetoothManager.openGattServer(context, gattServerCallback)
-            
-            // Create the service
+
             val service = BluetoothGattService(Protocol.SERVICE_UUID, SERVICE_TYPE_PRIMARY)
-            
-            // Add message characteristic (write)
+
             val messageCharacteristic = BluetoothGattCharacteristic(
                 Protocol.MESSAGE_CHARACTERISTIC_UUID,
                 PROPERTY_WRITE or PROPERTY_READ,
                 PERMISSION_WRITE or PERMISSION_READ
             )
-            service.addCharacteristic(messageCharacteristic)
-            
-            // Add transfer characteristic (for file chunks)
+
             val transferCharacteristic = BluetoothGattCharacteristic(
                 Protocol.TRANSFER_CHARACTERISTIC_UUID,
                 PROPERTY_WRITE or PROPERTY_READ,
                 PERMISSION_WRITE or PERMISSION_READ
             )
+
+            service.addCharacteristic(messageCharacteristic)
             service.addCharacteristic(transferCharacteristic)
-            
-            // Add service to server
+
             val added = gattServer?.addService(service) ?: false
             if (added) {
                 _isRunning.value = true
                 Log.d(tag, "GATT server started successfully")
-                return true
+                true
             } else {
                 Log.e(tag, "Failed to add service to GATT server")
-                return false
+                false
             }
         } catch (e: Exception) {
             Log.e(tag, "Failed to start GATT server", e)
-            return false
+            false
         }
     }
-    
+
     @SuppressLint("MissingPermission")
     fun stopServer() {
-        if (!hasRequiredPermissions()) {
-            return
-        }
-        
+        if (!hasRequiredPermissions()) return
+
         try {
             gattServer?.close()
             gattServer = null
             _isRunning.value = false
             connectedDevices.clear()
+            scope.cancel() // stops any pending friend checks safely
             Log.d(tag, "GATT server stopped")
         } catch (e: Exception) {
             Log.e(tag, "Failed to stop GATT server", e)
         }
     }
-    
-    private fun hasRequiredPermissions(): Boolean {
-        return PermissionHelper.hasBluetoothPermissions(context)
-    }
+
+    private fun hasRequiredPermissions(): Boolean =
+        PermissionHelper.hasBluetoothPermissions(context)
 
     private fun isBluetoothEnabled(): Boolean {
         val adapter = bluetoothManager.adapter
