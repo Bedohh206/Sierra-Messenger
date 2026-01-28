@@ -53,7 +53,6 @@ fun ChatScreen(
     
 // Database
 val database = remember { AppDatabase.getDatabase(context) }
-val database = remember { AppDatabase.getDatabase(context) }
 val friendDao = remember { database.friendDao() }
 
 val repository = remember {
