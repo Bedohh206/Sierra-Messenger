@@ -40,18 +40,19 @@ fun NearbyPeersScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    // ✅ Database FIRST (so everything else can use it safely)
-    val database = remember { AppDatabase.getDatabase(context) }
-    val friendDao = remember { database.friendDao() }
-    val groupDao = remember { database.groupDao() }
-    val repository = remember {
-        MessengerRepository(
-            database.peerDao(),
-            database.messageDao(),
-            database.groupDao(),
-            database.friendDao()
-        )
-    }
+   // ✅ Database / DAOs
+val database = remember { AppDatabase.getDatabase(context) }
+val friendDao = remember { database.friendDao() }
+
+// ✅ Repository (use the constructor that includes friendDao)
+val repository = remember {
+    MessengerRepository(
+        database.peerDao(),
+        database.messageDao(),
+        database.groupDao(),
+        friendDao
+    )
+}
 
     // ✅ Bluetooth components
     val bleScanner = remember { BleScanner(context) }
