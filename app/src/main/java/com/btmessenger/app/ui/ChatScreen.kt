@@ -64,19 +64,6 @@ val repository = remember {
     )
 }
 
-
-val repository = remember {
-    // IMPORTANT: use the same constructor signature you use elsewhere.
-    // If your MessengerRepository takes friendDao as the 4th param, pass it here.
-    MessengerRepository(
-        database.peerDao(),
-        database.messageDao(),
-        database.groupDao(),
-        friendDao
-    )
-}
-
-
     // Bluetooth
     val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     val bluetoothAdapter = bluetoothManager.adapter
