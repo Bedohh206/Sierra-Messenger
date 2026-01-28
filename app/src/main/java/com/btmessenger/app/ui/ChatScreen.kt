@@ -52,11 +52,15 @@ fun ChatScreen(
     val scope = rememberCoroutineScope()
     
     // Database
-    val database = remember { AppDatabase.getDatabase(context) }
-    val repository = remember { MessengerRepository(database.peerDao(), database.messageDao(), database.groupDao()) }
-    val database = remember { AppDatabase.getDatabase(context) }
-    val friendDao = remember { database.friendDao() }
-    val repository = remember { MessengerRepository(database.peerDao(), database.messageDao(), database.groupDao()) }
+val database = remember { AppDatabase.getDatabase(context) }
+val friendDao = remember { database.friendDao() }
+val repository = remember {
+    MessengerRepository(
+        database.peerDao(),
+        database.messageDao(),
+        database.groupDao()
+    )
+}
 
     // Bluetooth
     val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
