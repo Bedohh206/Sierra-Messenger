@@ -54,13 +54,16 @@ fun ChatScreen(
     // Database
     val database = remember { AppDatabase.getDatabase(context) }
     val repository = remember { MessengerRepository(database.peerDao(), database.messageDao(), database.groupDao()) }
-    
+    val database = remember { AppDatabase.getDatabase(context) }
+    val friendDao = remember { database.friendDao() }
+    val repository = remember { MessengerRepository(database.peerDao(), database.messageDao(), database.groupDao()) }
+
     // Bluetooth
     val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     val bluetoothAdapter = bluetoothManager.adapter
     val device = bluetoothAdapter?.getRemoteDevice(peer.address)
     
-    val gattClient = remember { GattClient(context) }
+    val gattClient = remember { GattClient(context, friendDao = friendDao) }
     val classicClient = remember { ClassicClient(context) }
     
     // Audio
