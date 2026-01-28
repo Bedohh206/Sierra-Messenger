@@ -32,10 +32,6 @@ fun GroupChatScreen(
     val database = remember { AppDatabase.getDatabase(context) }
     val friendDao = remember { database.friendDao() }
 
-   val database = remember { AppDatabase.getDatabase(context) }
-   val friendDao = remember { database.friendDao() }
-   val repository = remember { MessengerRepository(database.peerDao(), database.messageDao(), database.groupDao(), friendDao) }
-
    val classicClient = remember { ClassicClient(context) }
 val database = remember { AppDatabase.getDatabase(context) }
 val friendDao = remember { database.friendDao() }
