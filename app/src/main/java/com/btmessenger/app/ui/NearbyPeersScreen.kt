@@ -63,8 +63,7 @@ val gattServer = remember { GattServer(context, friendDao) }
 val classicServer = remember { ClassicServer(context, android.os.Build.MODEL, groupDao) }
 
 val classicClient = remember { ClassicClient(context) }
-val gattClient = remember { GattClient(context, friendDao = friendDao) }
-
+val gattClient = remember { GattClient(context) }
 
     // ✅ Streams
     val isScanning by bleScanner.isScanning.collectAsState()
