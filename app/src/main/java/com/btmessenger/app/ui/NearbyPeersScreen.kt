@@ -55,16 +55,40 @@ fun NearbyPeersScreen(
     )
 }
 
-    // ✅ Bluetooth components
-    val bleScanner = remember { BleScanner(context) }
-    val bleAdvertiser = remember { BleAdvertiser(context) }
+   // Database + DAO (must come first)
+val database = remember { com.btmessenger.app.data.AppDatabase.getDatabase(context) }
+val friendDao = remember { database.friendDao() }
 
-    val gattServer = remember { GattServer(context, friendDao) }
-    val classicServer = remember { ClassicServer(context, android.os.Build.MODEL, groupDao) }
+// Bluetooth components
+val bleScanner = remember { BleScanner(context) }
+val bleAdvertiser = remember { BleAdvertiser(context) }
 
-    val classicClient = remember { ClassicClient(context) }
-    val gattClient = remember { GattClient(context, friendDao = friendDao) }
+val gattServer = remember {
+    GattServer(
+        context = context,
+        friendDao = friendDao
+    )
+}
 
+val classicServer = remember {
+    ClassicServer(
+        context = context,
+        deviceName = android.os.Build.MODEL,
+        groupDao = database.groupDao()
+    )
+}
+
+val repository = remember {
+    MessengerRepository(
+        peerDao = database.peerDao(),
+        messageDao = database.messageDao(),
+        groupDao = database.groupDao(),
+        friendDao = friendDao
+    )
+}
+
+val classicClient = remember { ClassicClient(context) }
+val gattClient = remember { GattClient(context, friendDao = friendDao) }
     // ✅ UI state
     var showGroupsDialog by remember { mutableStateOf(false) }
     var showMessageForGroup by remember { mutableStateOf<String?>(null) }
