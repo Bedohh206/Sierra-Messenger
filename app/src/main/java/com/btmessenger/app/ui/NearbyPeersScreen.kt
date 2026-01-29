@@ -55,11 +55,12 @@ fun NearbyPeersScreen(
         )
     }
 
-    // ✅ Bluetooth components (these were missing in your snippet)
+    // ✅ Bluetooth components
     val bleScanner = remember { BleScanner(context) }
     val bleAdvertiser = remember { BleAdvertiser(context) }
     val gattServer = remember { GattServer(context, friendDao) }
     val classicServer = remember { ClassicServer(context, android.os.Build.MODEL, groupDao) }
+
     val classicClient = remember { ClassicClient(context) }
     val gattClient = remember { GattClient(context, friendDao = friendDao) }
 
@@ -74,7 +75,7 @@ fun NearbyPeersScreen(
     val groups by repository.getAllGroups().collectAsState(initial = emptyList())
     val friends by repository.getAllFriends().collectAsState(initial = emptyList())
 
-    // Permissions
+    // ✅ Permissions
     val permissionsList = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         listOf(
             Manifest.permission.BLUETOOTH_SCAN,
@@ -90,7 +91,7 @@ fun NearbyPeersScreen(
     }
     val permissionsState = rememberMultiplePermissionsState(permissionsList)
 
-    // Bluetooth enable launcher
+    // ✅ Bluetooth enable launcher
     val bluetoothManager =
         context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     val bluetoothAdapter = bluetoothManager.adapter
@@ -100,6 +101,7 @@ fun NearbyPeersScreen(
 
     val isBluetoothEnabled = bluetoothAdapter?.isEnabled == true
 
+    // ✅ Scaffold
     Scaffold(
         topBar = {
             TopAppBar(
@@ -137,7 +139,8 @@ fun NearbyPeersScreen(
                 },
                 icon = {
                     Icon(
-                        imageVector = if (isAdvertising) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                        imageVector = if (isAdvertising) Icons.Default.Visibility
+                        else Icons.Default.VisibilityOff,
                         contentDescription = null
                     )
                 },
@@ -153,12 +156,14 @@ fun NearbyPeersScreen(
                 onCreate = { name ->
                     val gid = UUID.randomUUID().toString()
                     val hostIdVal = bluetoothAdapter?.address ?: android.os.Build.MODEL
+
                     val g = Group(
                         groupId = gid,
                         name = name,
                         hostId = hostIdVal,
                         createdAt = System.currentTimeMillis()
                     )
+
                     scope.launch { repository.insertGroup(g) }
                     showGroupsDialog = false
                 },
@@ -175,7 +180,9 @@ fun NearbyPeersScreen(
                             )
                             repository.insertGroup(g)
                         } else {
-                            repository.insertGroup(existing.copy(memberCount = existing.memberCount + 1))
+                            repository.insertGroup(
+                                existing.copy(memberCount = existing.memberCount + 1)
+                            )
                         }
                     }
                     showGroupsDialog = false
@@ -190,7 +197,7 @@ fun NearbyPeersScreen(
                 .padding(paddingValues)
         ) {
 
-            // Group message dialog
+            // ✅ Group message dialog
             showMessageForGroup?.let { gid ->
                 GroupMessageDialog(
                     groupId = gid,
@@ -198,7 +205,6 @@ fun NearbyPeersScreen(
                         scope.launch {
                             val msgId = UUID.randomUUID().toString()
                             val deviceId = android.os.Build.MODEL
-
                             val json = Protocol.createGroupTextMessage(msgId, deviceId, gid, text)
 
                             val hostId = repository.getGroupById(gid)?.hostId
@@ -226,11 +232,8 @@ fun NearbyPeersScreen(
                             }
 
                             try {
-                                if (targetPeer != null) {
-                                    sendToPeer(targetPeer)
-                                } else {
-                                    for (p in discoveredPeers) sendToPeer(p)
-                                }
+                                if (targetPeer != null) sendToPeer(targetPeer)
+                                else for (p in discoveredPeers) sendToPeer(p)
                             } catch (_: Exception) {
                             }
                         }
@@ -240,7 +243,7 @@ fun NearbyPeersScreen(
                 )
             }
 
-            // Permission status
+            // ✅ Permission status
             if (!permissionsState.allPermissionsGranted) {
                 Card(
                     modifier = Modifier
@@ -251,35 +254,24 @@ fun NearbyPeersScreen(
                     )
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Bluetooth Permissions Required", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Bluetooth Permissions Required",
+                            style = MaterialTheme.typography.titleMedium
+                        )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             "This app needs Bluetooth permissions to discover and connect to nearby devices.",
                             style = MaterialTheme.typography.bodyMedium
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                        Row {
-                            Button(onClick = { permissionsState.launchMultiplePermissionRequest() }) {
-                                Text("Grant Permissions")
-                            }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            val activity = LocalContext.current as? android.app.Activity
-                            OutlinedButton(onClick = {
-                                activity?.let {
-                                    com.btmessenger.app.permission.PermissionHelper.requestBluetoothPermissions(
-                                        it,
-                                        com.btmessenger.app.permission.PermissionHelper.REQUEST_BLUETOOTH_PERMS
-                                    )
-                                }
-                            }) {
-                                Text("Request via System")
-                            }
+                        Button(onClick = { permissionsState.launchMultiplePermissionRequest() }) {
+                            Text("Grant Permissions")
                         }
                     }
                 }
             }
 
-            // Bluetooth disabled card
+            // ✅ Bluetooth disabled card
             if (!isBluetoothEnabled) {
                 Card(
                     modifier = Modifier
@@ -304,7 +296,7 @@ fun NearbyPeersScreen(
                 }
             }
 
-            // Status chips
+            // ✅ Status chips
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -317,7 +309,7 @@ fun NearbyPeersScreen(
 
             Divider()
 
-            // Discovered peers list
+            // ✅ Discovered peers list
             if (discoveredPeers.isEmpty()) {
                 Box(
                     modifier = Modifier
@@ -375,94 +367,6 @@ fun NearbyPeersScreen(
             bleAdvertiser.stopAdvertising()
             gattServer.stopServer()
             classicServer.stopServer()
-        }
-    }
-}
-
-@Composable
-fun StatusChip(
-    label: String,
-    isActive: Boolean,
-    icon: androidx.compose.ui.graphics.vector.ImageVector
-) {
-    Surface(
-        color = if (isActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-        shape = MaterialTheme.shapes.small
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-                tint = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun PeerItem(
-    peer: Peer,
-    isFriend: Boolean = false,
-    onInvite: () -> Unit = {},
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .clickable(onClick = onClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = if (peer.type == "BLE") Icons.Default.Bluetooth else Icons.Default.BluetoothConnected,
-                contentDescription = null,
-                modifier = Modifier.size(40.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(peer.name, style = MaterialTheme.typography.titleMedium)
-                Text(
-                    peer.address,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                peer.rssi?.let { rssi ->
-                    Text(
-                        "Signal: $rssi dBm",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            if (isFriend) {
-                Button(onClick = { }) { Text("Friend") }
-            } else {
-                OutlinedButton(onClick = onInvite) { Text("Invite") }
-            }
-            Spacer(modifier = Modifier.width(8.dp))
-            Icon(
-                imageVector = Icons.Default.ChevronRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
     }
 }
