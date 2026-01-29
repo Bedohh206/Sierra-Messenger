@@ -46,19 +46,21 @@ fun NearbyPeersScreen(
     val groupDao = remember { database.groupDao() }
 
     // ✅ Repository (4 args, includes friendDao)
-    val repository = remember {
-        MessengerRepository(
-            database.peerDao(),
-            database.messageDao(),
-            database.groupDao(),
-            friendDao
-        )
-    }
+   val repository = remember {
+    MessengerRepository(
+        database.peerDao(),
+        database.messageDao(),
+        database.groupDao(),
+        friendDao
+    )
+}
 
     // ✅ Bluetooth components
     val bleScanner = remember { BleScanner(context) }
     val bleAdvertiser = remember { BleAdvertiser(context) }
-    val gattServer = remember { GattServer(context, friendDao) }
+   val friendDao = remember { database.friendDao() }
+val gattServer = remember { GattServer(context, friendDao) }
+
     val classicServer = remember { ClassicServer(context, android.os.Build.MODEL, groupDao) }
 
     val classicClient = remember { ClassicClient(context) }
