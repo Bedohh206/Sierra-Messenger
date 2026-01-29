@@ -40,27 +40,26 @@ fun NearbyPeersScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-  val database = remember { AppDatabase.getDatabase(context) }
-val friendDao = remember { database.friendDao() }
-val groupDao = remember { database.groupDao() }
+    // ✅ Database / DAOs (SINGLE SOURCE OF TRUTH)
+    val database = remember { AppDatabase.getDatabase(context) }
+    val friendDao = remember { database.friendDao() }
+    val groupDao = remember { database.groupDao() }
 
-val gattServer = remember { GattServer(context, friendDao) }
-
-val repository = remember {
-    MessengerRepository(
-        peerDao = database.peerDao(),
-        messageDao = database.messageDao(),
-        groupDao = database.groupDao(),
-        friendDao = friendDao
-    )
-}
+    // ✅ Repository (4 args, includes friendDao)
+    val repository = remember {
+        MessengerRepository(
+            peerDao = database.peerDao(),
+            messageDao = database.messageDao(),
+            groupDao = database.groupDao(),
+            friendDao = friendDao
+        )
+    }
 
     // ✅ Bluetooth components
     val bleScanner = remember { BleScanner(context) }
     val bleAdvertiser = remember { BleAdvertiser(context) }
-   val friendDao = remember { database.friendDao() }
-val gattServer = remember { GattServer(context, friendDao) }
 
+    val gattServer = remember { GattServer(context, friendDao) }
     val classicServer = remember { ClassicServer(context, android.os.Build.MODEL, groupDao) }
 
     val classicClient = remember { ClassicClient(context) }
@@ -141,8 +140,7 @@ val gattServer = remember { GattServer(context, friendDao) }
                 },
                 icon = {
                     Icon(
-                        imageVector = if (isAdvertising) Icons.Default.Visibility
-                        else Icons.Default.VisibilityOff,
+                        imageVector = if (isAdvertising) Icons.Default.Visibility else Icons.Default.VisibilityOff,
                         contentDescription = null
                     )
                 },
@@ -182,9 +180,7 @@ val gattServer = remember { GattServer(context, friendDao) }
                             )
                             repository.insertGroup(g)
                         } else {
-                            repository.insertGroup(
-                                existing.copy(memberCount = existing.memberCount + 1)
-                            )
+                            repository.insertGroup(existing.copy(memberCount = existing.memberCount + 1))
                         }
                     }
                     showGroupsDialog = false
@@ -236,8 +232,7 @@ val gattServer = remember { GattServer(context, friendDao) }
                             try {
                                 if (targetPeer != null) sendToPeer(targetPeer)
                                 else for (p in discoveredPeers) sendToPeer(p)
-                            } catch (_: Exception) {
-                            }
+                            } catch (_: Exception) { }
                         }
                         showMessageForGroup = null
                     },
@@ -256,10 +251,7 @@ val gattServer = remember { GattServer(context, friendDao) }
                     )
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            "Bluetooth Permissions Required",
-                            style = MaterialTheme.typography.titleMedium
-                        )
+                        Text("Bluetooth Permissions Required", style = MaterialTheme.typography.titleMedium)
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             "This app needs Bluetooth permissions to discover and connect to nearby devices.",
@@ -331,14 +323,6 @@ val gattServer = remember { GattServer(context, friendDao) }
                             text = if (isScanning) "Searching for devices..." else "No devices found",
                             style = MaterialTheme.typography.bodyLarge
                         )
-                        if (!isScanning) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                "Tap the search icon to start scanning",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
                     }
                 }
             } else {
