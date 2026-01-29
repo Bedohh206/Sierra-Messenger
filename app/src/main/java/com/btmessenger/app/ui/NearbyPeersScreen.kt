@@ -40,11 +40,12 @@ fun NearbyPeersScreen(
     val context = LocalContext.current
 val scope = rememberCoroutineScope()
 
-// Database first
+/// ✅ Database / DAOs (declare BEFORE using them)
 val database = remember { AppDatabase.getDatabase(context) }
 val friendDao = remember { database.friendDao() }
 val groupDao = remember { database.groupDao() }
 
+// ✅ Repository (4 args, includes friendDao)
 val repository = remember {
     MessengerRepository(
         database.peerDao(),
@@ -54,14 +55,10 @@ val repository = remember {
     )
 }
 
-// Bluetooth components (AFTER database exists)
-val bleScanner = remember { BleScanner(context) }
-val bleAdvertiser = remember { BleAdvertiser(context) }
+// ✅ Bluetooth components (use friendDao/groupDao variables)
 val gattServer = remember { GattServer(context, friendDao) }
 val classicServer = remember { ClassicServer(context, android.os.Build.MODEL, groupDao) }
 
-val classicClient = remember { ClassicClient(context) }
-val gattClient = remember { GattClient(context, friendDao = friendDao) }
 
     // ✅ UI state
     var showGroupsDialog by remember { mutableStateOf(false) }
