@@ -38,27 +38,30 @@ fun NearbyPeersScreen(
     onGroupSelected: (String) -> Unit
 ) {
     val context = LocalContext.current
-val scope = rememberCoroutineScope()
+    val scope = rememberCoroutineScope()
 
-/// ✅ Database / DAOs (declare BEFORE using them)
-val database = remember { AppDatabase.getDatabase(context) }
-val friendDao = remember { database.friendDao() }
-val groupDao = remember { database.groupDao() }
+    // ✅ Database / DAOs (declare BEFORE using them)
+    val database = remember { AppDatabase.getDatabase(context) }
+    val friendDao = remember { database.friendDao() }
+    val groupDao = remember { database.groupDao() }
 
-// ✅ Repository (4 args, includes friendDao)
-val repository = remember {
-    MessengerRepository(
-        database.peerDao(),
-        database.messageDao(),
-        database.groupDao(),
-        friendDao
-    )
-}
+    // ✅ Repository (4 args, includes friendDao)
+    val repository = remember {
+        MessengerRepository(
+            database.peerDao(),
+            database.messageDao(),
+            database.groupDao(),
+            friendDao
+        )
+    }
 
-// ✅ Bluetooth components (use friendDao/groupDao variables)
-val gattServer = remember { GattServer(context, friendDao) }
-val classicServer = remember { ClassicServer(context, android.os.Build.MODEL, groupDao) }
-
+    // ✅ Bluetooth components (these were missing in your snippet)
+    val bleScanner = remember { BleScanner(context) }
+    val bleAdvertiser = remember { BleAdvertiser(context) }
+    val gattServer = remember { GattServer(context, friendDao) }
+    val classicServer = remember { ClassicServer(context, android.os.Build.MODEL, groupDao) }
+    val classicClient = remember { ClassicClient(context) }
+    val gattClient = remember { GattClient(context, friendDao = friendDao) }
 
     // ✅ UI state
     var showGroupsDialog by remember { mutableStateOf(false) }
@@ -88,17 +91,14 @@ val classicServer = remember { ClassicServer(context, android.os.Build.MODEL, gr
     val permissionsState = rememberMultiplePermissionsState(permissionsList)
 
     // Bluetooth enable launcher
-    val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+    val bluetoothManager =
+        context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     val bluetoothAdapter = bluetoothManager.adapter
     val enableBluetoothLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { }
 
     val isBluetoothEnabled = bluetoothAdapter?.isEnabled == true
-
-    // ✅ KEEP YOUR EXISTING Scaffold/UI CODE BELOW THIS LINE
-    ...
-}
 
     Scaffold(
         topBar = {
@@ -146,7 +146,7 @@ val classicServer = remember { ClassicServer(context, android.os.Build.MODEL, gr
         }
     ) { paddingValues ->
 
-        // ✅ Groups dialog (single source of truth)
+        // ✅ Groups dialog
         if (showGroupsDialog) {
             GroupsDialog(
                 groups = groups,
@@ -184,7 +184,6 @@ val classicServer = remember { ClassicServer(context, android.os.Build.MODEL, gr
             )
         }
 
-        // ✅ Main content
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -200,10 +199,8 @@ val classicServer = remember { ClassicServer(context, android.os.Build.MODEL, gr
                             val msgId = UUID.randomUUID().toString()
                             val deviceId = android.os.Build.MODEL
 
-                            // Persist local; broadcast handled in your logic below/elsewhere
                             val json = Protocol.createGroupTextMessage(msgId, deviceId, gid, text)
 
-                            // Try host if known, else broadcast to all
                             val hostId = repository.getGroupById(gid)?.hostId
                             val targetPeer =
                                 if (!hostId.isNullOrEmpty())
@@ -234,7 +231,8 @@ val classicServer = remember { ClassicServer(context, android.os.Build.MODEL, gr
                                 } else {
                                     for (p in discoveredPeers) sendToPeer(p)
                                 }
-                            } catch (_: Exception) { }
+                            } catch (_: Exception) {
+                            }
                         }
                         showMessageForGroup = null
                     },
@@ -319,7 +317,7 @@ val classicServer = remember { ClassicServer(context, android.os.Build.MODEL, gr
 
             Divider()
 
-            // ✅ Discovered peers list
+            // Discovered peers list
             if (discoveredPeers.isEmpty()) {
                 Box(
                     modifier = Modifier
@@ -441,9 +439,17 @@ fun PeerItem(
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(peer.name, style = MaterialTheme.typography.titleMedium)
-                Text(peer.address, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    peer.address,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 peer.rssi?.let { rssi ->
-                    Text("Signal: $rssi dBm", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        "Signal: $rssi dBm",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
             if (isFriend) {
