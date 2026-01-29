@@ -11,12 +11,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.btmessenger.app.bluetooth.GattClient
 import com.btmessenger.app.bluetooth.Protocol
 import com.btmessenger.app.data.AppDatabase
 import com.btmessenger.app.data.entities.Message
 import com.btmessenger.app.data.repository.MessengerRepository
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -32,7 +34,7 @@ fun GroupChatScreen(
     val database = remember { AppDatabase.getDatabase(context) }
     val friendDao = remember { database.friendDao() }
 
-    // ✅ Repository (PASS friendDao as 4th arg — this fixes your build error)
+    // ✅ Repository (MUST include friendDao as 4th arg)
     val repository = remember {
         MessengerRepository(
             database.peerDao(),
@@ -42,16 +44,15 @@ fun GroupChatScreen(
         )
     }
 
-    // ✅ Optional (safe): prevents "No value passed for parameter friendDao" if your ctor requires it
-    // If you don't use it here, it's still fine to keep.
-    val gattClient = remember { GattClient(context, friendDao = friendDao) }
-
     // ✅ Messages stream
-    val messages by repository.getMessagesForGroup(groupId)
+    val messages by repository
+        .getMessagesForGroup(groupId)
         .collectAsState(initial = emptyList())
 
     // ✅ Input state
     var text by remember { mutableStateOf("") }
+
+    val dateFormat = remember { SimpleDateFormat.getDateTimeInstance(SimpleDateFormat.SHORT, SimpleDateFormat.SHORT, Locale.getDefault()) }
 
     Scaffold(
         topBar = {
@@ -76,9 +77,10 @@ fun GroupChatScreen(
                         value = text,
                         onValueChange = { text = it },
                         modifier = Modifier.weight(1f),
-                        placeholder = { Text("Message") }
+                        placeholder = { Text("Message") },
+                        singleLine = true
                     )
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Button(
                         onClick = {
                             if (text.isBlank()) return@Button
@@ -93,16 +95,18 @@ fun GroupChatScreen(
                                     toId = "",
                                     groupId = groupId,
                                     timestamp = System.currentTimeMillis(),
-                                    body = text,
+                                    body = text.trim(),
                                     status = "sent",
                                     isIncoming = false
                                 )
+
                                 repository.insertMessage(entity)
 
                                 // Broadcasting handled elsewhere (as you said)
                                 text = ""
                             }
-                        }
+                        },
+                        enabled = text.isNotBlank()
                     ) {
                         Text("Send")
                     }
@@ -120,8 +124,7 @@ fun GroupChatScreen(
                     Text(m.fromId, style = MaterialTheme.typography.labelSmall)
                     Text(m.body ?: "", style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        java.text.SimpleDateFormat.getDateTimeInstance()
-                            .format(java.util.Date(m.timestamp)),
+                        dateFormat.format(Date(m.timestamp)),
                         style = MaterialTheme.typography.labelSmall
                     )
                 }
