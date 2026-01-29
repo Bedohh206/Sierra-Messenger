@@ -38,15 +38,15 @@ fun NearbyPeersScreen(
     onGroupSelected: (String) -> Unit
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
+val scope = rememberCoroutineScope()
 
-    // ✅ Database / DAOs (SINGLE SOURCE OF TRUTH)
-    val database = remember { AppDatabase.getDatabase(context) }
-    val friendDao = remember { database.friendDao() }
-    val groupDao = remember { database.groupDao() }
+// ✅ Database / DAOs
+val database = remember { AppDatabase.getDatabase(context) }
+val friendDao = remember { database.friendDao() }
+val groupDao = remember { database.groupDao() }
 
-    // ✅ Repository (4 args, includes friendDao)
-    val repository = remember {
+// ✅ Repository (MUST be positional args — no named args)
+val repository = remember {
     MessengerRepository(
         database.peerDao(),
         database.messageDao(),
@@ -55,43 +55,16 @@ fun NearbyPeersScreen(
     )
 }
 
-   // Database + DAO (must come first)
-val database = remember { com.btmessenger.app.data.AppDatabase.getDatabase(context) }
-val friendDao = remember { database.friendDao() }
-
-// Bluetooth components
+// ✅ Bluetooth components
 val bleScanner = remember { BleScanner(context) }
 val bleAdvertiser = remember { BleAdvertiser(context) }
 
-val gattServer = remember {
-    GattServer(
-        context = context,
-        friendDao = friendDao
-    )
-}
-
-val classicServer = remember {
-    ClassicServer(
-        context = context,
-        deviceName = android.os.Build.MODEL,
-        groupDao = database.groupDao()
-    )
-}
-
-val repository = remember {
-    MessengerRepository(
-        peerDao = database.peerDao(),
-        messageDao = database.messageDao(),
-        groupDao = database.groupDao(),
-        friendDao = friendDao
-    )
-}
+val gattServer = remember { GattServer(context, friendDao) }
+val classicServer = remember { ClassicServer(context, android.os.Build.MODEL, groupDao) }
 
 val classicClient = remember { ClassicClient(context) }
 val gattClient = remember { GattClient(context, friendDao = friendDao) }
-    // ✅ UI state
-    var showGroupsDialog by remember { mutableStateOf(false) }
-    var showMessageForGroup by remember { mutableStateOf<String?>(null) }
+
 
     // ✅ Streams
     val isScanning by bleScanner.isScanning.collectAsState()
