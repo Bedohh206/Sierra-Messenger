@@ -40,15 +40,11 @@ fun NearbyPeersScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-   val database = remember { AppDatabase.getDatabase(context) }
+  val database = remember { AppDatabase.getDatabase(context) }
 val friendDao = remember { database.friendDao() }
+val groupDao = remember { database.groupDao() }
 
-val gattServer = remember {
-    GattServer(
-        context = context,
-        friendDao = friendDao
-    )
-}
+val gattServer = remember { GattServer(context, friendDao) }
 
 val repository = remember {
     MessengerRepository(
