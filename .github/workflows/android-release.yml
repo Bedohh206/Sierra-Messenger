@@ -37,12 +37,11 @@ jobs:
 
       - name: Write keystore.properties
         run: |
-          cat > keystore.properties <<EOF
-          storeFile=keystore/my-release-key.jks
-          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
-          keyAlias=${{ secrets.KEY_ALIAS }}
-          keyPassword=${{ secrets.KEY_PASSWORD }}
-          EOF
+          mkdir -p keystore
+          echo "storeFile=keystore/my-release-key.jks" > keystore.properties
+          echo "storePassword=${{ secrets.KEYSTORE_PASSWORD }}" >> keystore.properties
+          echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> keystore.properties
+          echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> keystore.properties
           echo "keystore.properties written"
 
       # Build the signed release bundle
@@ -50,6 +49,21 @@ jobs:
         run: ./gradlew :app:bundleRelease --no-daemon --stacktrace
 
       # Always upload outputs for debugging
+      - name: Timestamp-sign AAB with jarsigner
+        if: success()
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          echo "Signing AAB with jarsigner (timestamping)"
+          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
+            -keystore keystore/my-release-key.jks \
+            -storepass "$KEYSTORE_PASSWORD" -keypass "$KEY_PASSWORD" \
+            -tsa http://timestamp.digicert.com \
+            app/build/outputs/bundle/release/app-release.aab "$KEY_ALIAS"
+          echo "Verify signed AAB"
+          jarsigner -verify -verbose -certs app/build/outputs/bundle/release/app-release.aab || true
       - name: Upload build outputs (always)
         if: always()
         uses: actions/upload-artifact@v4
