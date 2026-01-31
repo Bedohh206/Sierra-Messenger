@@ -50,6 +50,15 @@ jobs:
           keyAlias=$KEY_ALIAS
           keyPassword=$KEY_PASSWORD
           EOF
+          # Validate decoded keystore exists and is non-empty
+          if [ ! -s keystore/my-release-key.jks ]; then
+            echo "ERROR: Decoded keystore is missing or empty. Ensure KEYSTORE_BASE64 secret contains the base64 of your keystore." >&2
+            ls -l keystore || true
+            exit 1
+          fi
+          echo "Keystore size: $(stat -c%s keystore/my-release-key.jks) bytes"
+          # Quick sanity check with keytool (will fail if password/alias incorrect)
+          keytool -list -keystore keystore/my-release-key.jks -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS"
 
       - name: Grant execute for gradlew
         run: chmod +x ./gradlew
