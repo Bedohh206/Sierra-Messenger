@@ -128,3 +128,10 @@ lint/tmp/
 
 vercel-deploy/
 
+app-release.apks
+bundletool-all-*.jar
+keystore*
+release-key-base64.txt
+keystore_base64.txt
+scripts/
+tools/
