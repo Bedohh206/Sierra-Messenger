@@ -30,6 +30,8 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import kotlinx.coroutines.launch
 import java.util.UUID
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.foundation.shape.RoundedCornerShape
 
 @OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -39,6 +41,10 @@ fun NearbyPeersScreen(
 ) {
     val context = LocalContext.current
 val scope = rememberCoroutineScope()
+
+    // UI state for dialogs
+    var showGroupsDialog by remember { mutableStateOf(false) }
+    var showMessageForGroup by remember { mutableStateOf<String?>(null) }
 
 // ✅ Database / DAOs
 val database = remember { AppDatabase.getDatabase(context) }
@@ -53,6 +59,48 @@ val repository = remember {
         database.groupDao(),
         friendDao
     )
+}
+
+@Composable
+fun StatusChip(label: String, active: Boolean, icon: ImageVector) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp), tint = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(label, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+@Composable
+fun PeerItem(
+    peer: Peer,
+    isFriend: Boolean,
+    onInvite: () -> Unit,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(peer.name, style = MaterialTheme.typography.bodyLarge)
+            Text(peer.address ?: "", style = MaterialTheme.typography.bodySmall)
+        }
+        if (!isFriend) {
+            IconButton(onClick = onInvite) {
+                Icon(Icons.Default.PersonAdd, contentDescription = "Invite")
+            }
+        } else {
+            Icon(Icons.Default.Check, contentDescription = "Friend")
+        }
+    }
 }
 
 // ✅ Bluetooth components
