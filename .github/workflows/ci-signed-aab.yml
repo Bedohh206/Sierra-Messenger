@@ -65,6 +65,21 @@ jobs:
 
       - name: Build signed AAB
         run: ./gradlew :app:bundleRelease --no-daemon --stacktrace
+      - name: Verify produced AAB is signed
+        run: |
+          AAB=app/build/outputs/bundle/release/app-release.aab
+          if [ ! -f "$AAB" ]; then
+            echo "ERROR: AAB not found at $AAB" >&2
+            ls -l app/build/outputs/bundle/release || true
+            exit 1
+          fi
+          echo "Running jarsigner verify on $AAB"
+          out=$(jarsigner -verify -verbose -certs "$AAB" 2>&1 || true)
+          echo "$out"
+          if echo "$out" | grep -q "jar is unsigned"; then
+            echo "ERROR: AAB appears unsigned. Aborting upload." >&2
+            exit 1
+          fi
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4
