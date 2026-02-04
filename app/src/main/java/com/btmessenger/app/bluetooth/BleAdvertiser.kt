@@ -32,12 +32,14 @@ class BleAdvertiser(private val context: Context) {
     private val advertiseCallback = object : AdvertiseCallback() {
         override fun onStartSuccess(settingsInEffect: AdvertiseSettings?) {
             super.onStartSuccess(settingsInEffect)
+            Log.d("ADV", "Advertising SUCCESS: $settingsInEffect")
             Log.d(tag, "BLE advertising started successfully")
             _isAdvertising.value = true
         }
-        
+
         override fun onStartFailure(errorCode: Int) {
             super.onStartFailure(errorCode)
+            Log.e("ADV", "Advertising FAILED: error=$errorCode")
             Log.e(tag, "BLE advertising failed with error: $errorCode")
             _isAdvertising.value = false
         }
@@ -45,37 +47,32 @@ class BleAdvertiser(private val context: Context) {
     
     @SuppressLint("MissingPermission")
     fun startAdvertising(): Boolean {
-        if (!hasRequiredPermissions()) {
-            Log.e(tag, "Missing Bluetooth permissions")
+        val advertiserLocal = BluetoothAdapter.getDefaultAdapter()?.bluetoothLeAdvertiser
+        if (advertiserLocal == null) {
+            Log.e(tag, "No BLE advertiser available")
             return false
         }
-        
-        if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled) {
-            Log.e(tag, "Bluetooth is not available or not enabled")
-            return false
-        }
-        
-        advertiser = bluetoothAdapter.bluetoothLeAdvertiser
-        if (advertiser == null) {
-            Log.e(tag, "Device does not support BLE advertising")
-            return false
-        }
-        
+
         val settings = AdvertiseSettings.Builder()
             .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
+            .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_LOW)
             .setConnectable(true)
-            .setTimeout(0)
-            .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_HIGH)
+            .setTimeout(0) // 0 = no timeout
             .build()
-        
+
         val data = AdvertiseData.Builder()
-            .setIncludeDeviceName(true)
+            .setIncludeDeviceName(false) // move name to scan response to reduce payload
             .setIncludeTxPowerLevel(false)
             .addServiceUuid(ParcelUuid(Protocol.SERVICE_UUID))
             .build()
-        
+
+        val scanResponse = AdvertiseData.Builder()
+            .setIncludeDeviceName(true) // show friendly name in scanners
+            .build()
+
         try {
-            advertiser?.startAdvertising(settings, data, advertiseCallback)
+            Log.d(tag, "startAdvertising called")
+            advertiserLocal.startAdvertising(settings, data, scanResponse, advertiseCallback)
             return true
         } catch (e: Exception) {
             Log.e(tag, "Failed to start advertising", e)
@@ -85,17 +82,9 @@ class BleAdvertiser(private val context: Context) {
     
     @SuppressLint("MissingPermission")
     fun stopAdvertising() {
-        if (!hasRequiredPermissions()) {
-            return
-        }
-        
-        try {
-            advertiser?.stopAdvertising(advertiseCallback)
-            _isAdvertising.value = false
-            Log.d(tag, "BLE advertising stopped")
-        } catch (e: Exception) {
-            Log.e(tag, "Failed to stop advertising", e)
-        }
+        val advertiserLocal = BluetoothAdapter.getDefaultAdapter()?.bluetoothLeAdvertiser
+        advertiserLocal?.stopAdvertising(advertiseCallback)
+        Log.d(tag, "stopAdvertising called")
     }
     
     private fun hasRequiredPermissions(): Boolean {

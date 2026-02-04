@@ -1,0 +1,336 @@
+# ===============================
+# Sierra Pulse Smart Installer
+# Clean Rebuild — UTF‑8 Safe
+# ===============================
+
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+# -------------------------------
+# Versioning Helper (defined early so banner can call it)
+# -------------------------------
+function Get-And-Increment-Version {
+    $versionFile = ".\version.txt"
+
+    # Create file if missing
+    if (-not (Test-Path $versionFile)) {
+        "1.0.0" | Out-File $versionFile -Encoding utf8
+    }
+
+    # Read version
+    $raw = Get-Content $versionFile -Raw
+    $raw = $raw.Trim()
+
+    # Parse semantic version
+    if ($raw -notmatch "^\d+\.\d+\.\d+$") {
+        Write-Color "⚠️ Invalid version format in version.txt. Resetting to 1.0.0" Yellow
+        $raw = "1.0.0"
+    }
+
+    $parts = $raw.Split(".")
+    $major = [int]$parts[0]
+    $minor = [int]$parts[1]
+    $patch = [int]$parts[2]
+
+    # Increment patch version
+    $patch++
+
+    $newVersion = "$major.$minor.$patch"
+
+    # Save updated version
+    $newVersion | Out-File $versionFile -Encoding utf8
+
+    return $newVersion
+}
+
+# ===============================
+# Sierra Pulse Version Info
+# ===============================
+
+$version   = Get-And-Increment-Version
+$buildDate = (Get-Date -Format "yyyy.MM.dd")
+$buildType = "Stable"
+
+Write-Host "                               Version: v$version" -ForegroundColor Yellow
+Write-Host "                               Build:   $buildDate" -ForegroundColor Yellow
+Write-Host "                               Status:  $buildType" -ForegroundColor Yellow
+Write-Host ""
+
+$apkPath = ".\apks_out\universal.apk"
+$package = "com.btmessenger.app"
+
+# Create timestamped log file
+$timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
+$logDir = ".\logs"
+$logFile = "$logDir\install_$timestamp.log"
+
+if (-not (Test-Path $logDir)) {
+    New-Item -ItemType Directory -Path $logDir | Out-Null
+}
+
+# -------------------------------
+# Log Rotation
+# -------------------------------
+function Rotate-Logs {
+    param (
+        [int]$Keep = 20
+    )
+
+    Write-Color "🧹 Checking for old logs..." Cyan
+
+    $logFiles = Get-ChildItem -Path $logDir -Filter "*.log" | 
+                Sort-Object LastWriteTime -Descending
+
+    if ($logFiles.Count -le $Keep) {
+        Write-Color "📁 Log count within limit ($($logFiles.Count)/$Keep)." DarkGray
+        return
+    }
+
+    $toDelete = $logFiles[$Keep..($logFiles.Count - 1)]
+
+    foreach ($file in $toDelete) {
+        Write-Color "🗑️ Removing old log: $($file.Name)" Yellow
+        Remove-Item $file.FullName -Force
+    }
+
+    Write-Color "✨ Log rotation complete." Green
+}
+
+Time-Block "Log Rotation" {
+    Rotate-Logs -Keep 20
+}
+# -------------------------------
+# Logging + Color Output
+# -------------------------------
+function Log {
+    param ([string]$Text)
+    $Text | Out-File -FilePath $logFile -Append -Encoding utf8
+}
+
+function Write-Color {
+    param (
+        [string]$Text,
+        [string]$Color = "White"
+    )
+    Write-Host $Text -ForegroundColor $Color
+    Log $Text
+}
+
+function Fail {
+    param ([string]$Message)
+    Write-Color "❌ ERROR: $Message" Red
+    Write-Color "📄 See log for details: $logFile" DarkGray
+    exit 1
+}
+
+# -------------------------------
+# ADB Command Wrapper
+# -------------------------------
+function Run-ADB {
+    param ([string]$Command)
+
+    # Ensure wireless ADB is alive before running the command
+    Ensure-WifiADB
+
+    $full = "adb -s $global:SelectedDevice $Command"
+    Write-Color "➡️ Running: $full" DarkGray
+
+    $output = Invoke-Expression $full 2>&1
+    Log $output
+
+    if ($LASTEXITCODE -ne 0 -and $output -notmatch "Success") {
+        Fail "ADB command failed: $full`n$output"
+    }
+
+    return $output
+}
+
+function Try-WifiADB {
+    Write-Color "📶 Attempting Wi-Fi ADB auto-connect..." Cyan
+
+    # Get phone IP via USB
+    $ip = adb shell "ip addr show wlan0" |
+        Select-String -Pattern "inet " |
+        ForEach-Object {
+            ($_ -split "\s+")[2].Split("/")[0]
+        }
+
+    if (-not $ip) {
+        Write-Color "⚠️ Could not detect device IP over USB. Skipping Wi-Fi auto-connect." Yellow
+        return
+    }
+
+    Write-Color "📡 Detected device IP: $ip" Green
+
+    # Try connecting
+    $result = adb connect "$ip`:5555" 2>&1
+    Log $result
+
+    if ($result -match "connected") {
+        Write-Color "✅ Wi-Fi ADB connected: $ip:5555" Green
+    } else {
+        Write-Color "⚠️ Wi-Fi ADB connection failed. USB mode will be used." Yellow
+    }
+}
+
+function Ensure-WifiADB {
+    Write-Color "🔄 Checking Wi-Fi ADB connection..." Cyan
+
+    # If the selected device is already wireless and still connected, do nothing
+    if ($global:SelectedDevice -match "192\.168\.") {
+        $devices = adb devices | Select-String "device$"
+        if ($devices -and $devices.ToString() -match $global:SelectedDevice) {
+            Write-Color "📶 Wi-Fi ADB still connected." Green
+            return
+        }
+    }
+
+    Write-Color "⚠️ Wi-Fi ADB connection lost. Attempting reconnect..." Yellow
+
+    # Get phone IP via USB (fallback)
+    $ip = adb shell "ip addr show wlan0" |
+        Select-String -Pattern "inet " |
+        ForEach-Object {
+            ($_ -split "\s+")[2].Split("/")[0]
+        }
+
+    if (-not $ip) {
+        Write-Color "❌ Could not retrieve device IP. Falling back to USB." Red
+        return
+    }
+
+    Write-Color "📡 Device IP detected: $ip" Cyan
+
+    $result = adb connect "$ip`:5555" 2>&1
+    Log $result
+
+    if ($result -match "connected") {
+        Write-Color "✅ Wi-Fi ADB reconnected: $ip:5555" Green
+        $global:SelectedDevice = "$ip`:5555"
+    } else {
+        Write-Color "⚠️ Wi-Fi reconnect failed. USB mode will continue." Yellow
+    }
+}
+
+# -------------------------------
+# Timing Wrapper
+# -------------------------------
+function Time-Block {
+    param (
+        [string]$Label,
+        [ScriptBlock]$Action
+    )
+
+    Write-Color "⏱️ Starting: $Label" Cyan
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+
+    & $Action
+
+    $sw.Stop()
+    Write-Color "⏳ $Label completed in $($sw.Elapsed.TotalSeconds.ToString("0.00")) sec" DarkGray
+}
+
+# -------------------------------
+# APK Validation
+# -------------------------------
+function Validate-APK {
+    if (-not (Test-Path $apkPath)) {
+        Fail "APK not found at path: $apkPath"
+    }
+
+    Write-Color "📦 APK found: $apkPath" Green
+}
+
+# -------------------------------
+# Smart Device Detection (USB + Wi-Fi)
+# -------------------------------
+function Wait-ForDevice {
+    Write-Color "🔍 Scanning for connected devices (USB + Wi-Fi)..." Cyan
+
+    $attempt = 0
+    while ($true) {
+        $raw = adb devices | Select-String "device$"
+
+        if ($raw) {
+            $devices = $raw.ToString().Split("`n") | ForEach-Object {
+                ($_ -split "\s+")[0]
+            }
+
+            # Prefer wireless ADB first
+            $wifi = $devices | Where-Object { $_ -match "192\.168\." }
+            if ($wifi.Count -gt 0) {
+                $global:SelectedDevice = $wifi[0]
+                Write-Color "📶 Wireless device detected: $global:SelectedDevice" Green
+                break
+            }
+
+            # Otherwise pick a physical USB device
+            $physical = $devices | Where-Object { $_ -notmatch "emulator" }
+            if ($physical.Count -gt 0) {
+                $global:SelectedDevice = $physical[0]
+                Write-Color "🔌 USB device detected: $global:SelectedDevice" Green
+                break
+            }
+
+            # Fallback: pick first device
+            $global:SelectedDevice = $devices[0]
+            Write-Color "📌 Auto-selected device: $global:SelectedDevice" Yellow
+            break
+        }
+
+        if ($attempt -eq 0) {
+            Write-Color "⚠️ No device detected — restarting ADB..." Yellow
+            adb kill-server
+            adb start-server
+        }
+
+        $attempt++
+        Write-Color "⏳ Waiting for device... ($attempt)" Yellow
+        Start-Sleep -Seconds 1
+    }
+
+    Write-Color "🔗 Binding ADB to device: $global:SelectedDevice" Cyan
+}
+
+# -------------------------------
+# MAIN SCRIPT
+# -------------------------------
+$scriptStart = Get-Date
+
+Write-Color "🚀 Sierra Pulse Smart Installer Started" Cyan
+Write-Color "📝 Log file: $logFile" DarkGray
+
+Time-Block "APK Validation" {
+    Validate-APK
+}
+
+Time-Block "Wi-Fi Auto-Connect" {
+    Try-WifiADB
+}
+
+Time-Block "Device Detection" {
+    Wait-ForDevice
+}
+
+Time-Block "Stop App" {
+    Run-ADB "shell am force-stop $package"
+}
+
+Time-Block "Clear App Data" {
+    Run-ADB "shell pm clear $package"
+}
+
+Time-Block "Uninstall Old Version" {
+    Run-ADB "uninstall $package"
+}
+
+Time-Block "Install New APK" {
+    Run-ADB "install -r $apkPath"
+}
+
+Time-Block "Launch App" {
+    Run-ADB "shell monkey -p $package 1"
+}
+
+$total = (Get-Date) - $scriptStart
+Write-Color "✔️ All tasks completed in $($total.TotalSeconds.ToString("0.00")) sec" Green
+Write-Color "📄 Full log saved to: $logFile" DarkGray

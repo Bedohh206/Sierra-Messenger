@@ -40,7 +40,8 @@ fun GroupChatScreen(
             database.peerDao(),
             database.messageDao(),
             database.groupDao(),
-            friendDao
+            friendDao,
+            database.outboxDao()
         )
     }
 

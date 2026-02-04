@@ -1,7 +1,8 @@
-<<<<<<< HEAD
 # Bluetooth Messenger
 
-A peer-to-peer messaging and file sharing Android app that works offline using Bluetooth (BLE and Classic Bluetooth) when there's no WiFi or mobile data available.
+A peer-to-peer messaging and file sharing app that works offline using Bluetooth (BLE and Classic Bluetooth), Wi-Fi Direct, and optional mesh networking (Bridgefy) when there's no WiFi or mobile data available.
+
+**Platforms:** Android (Kotlin + Compose) | iOS (Swift + SwiftUI)
 
 ## Features
 
@@ -10,9 +11,20 @@ A peer-to-peer messaging and file sharing Android app that works offline using B
 - **Device Discovery**: Automatically discover nearby Bluetooth devices
 - **Dual Bluetooth Support**: Uses both BLE (Bluetooth Low Energy) and Classic Bluetooth for maximum compatibility
 - **Image Sharing**: Share images with nearby devices (with offer/accept protocol)
+- **Multi-Transport Routing**: Automatic transport selection (BLE → Wi-Fi Direct → Mesh)
+- **Store-and-Forward**: Reliable delivery with ACK protocol and retry logic
+- **Mesh Networking**: Optional Bridgefy SDK for multi-hop message forwarding
 - **Message Persistence**: All messages are stored locally using Room database
-- **Modern UI**: Built with Jetpack Compose and Material 3 design
+- **Modern UI**: Built with Jetpack Compose (Android) and SwiftUI (iOS)
 - **Real-time Communication**: GATT server/client for BLE and RFCOMM for Classic Bluetooth
+
+## Documentation
+
+- **[MESH_QUICK_START.md](MESH_QUICK_START.md)** - Get started in 3 steps
+- **[MESH_ARCHITECTURE.md](MESH_ARCHITECTURE.md)** - Full architecture overview
+- **[BRIDGEFY_INTEGRATION.md](BRIDGEFY_INTEGRATION.md)** - Mesh SDK integration guide
+- **[TODO.md](TODO.md)** - Implementation status and next steps
+- **[VOICE_MESSAGING_GUIDE.md](VOICE_MESSAGING_GUIDE.md)** - Voice feature details
 
 ## Architecture
 

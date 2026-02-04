@@ -31,6 +31,12 @@ import com.btmessenger.app.data.AppDatabase
 import com.btmessenger.app.data.entities.Message
 import com.btmessenger.app.data.entities.Peer
 import com.btmessenger.app.data.repository.MessengerRepository
+import com.btmessenger.app.transport.BleSmallMessageTransport
+import com.btmessenger.app.transport.MessageRouter
+import com.btmessenger.app.transport.MeshSdkFactory
+import com.btmessenger.app.transport.TransportHint
+import com.btmessenger.app.transport.TransportThresholds
+import com.btmessenger.app.transport.WifiDirectTransport
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import kotlinx.coroutines.launch
@@ -55,7 +61,8 @@ fun ChatScreen(
             database.peerDao(),
             database.messageDao(),
             database.groupDao(),
-            friendDao
+            friendDao,
+            database.outboxDao()
         )
     }
 
@@ -66,6 +73,19 @@ fun ChatScreen(
 
     val gattClient = remember { GattClient(context) }
     val classicClient = remember { ClassicClient(context) }
+    val messageRouter = remember {
+        MessageRouter(
+            repository,
+            BleSmallMessageTransport(gattClient, classicClient),
+            WifiDirectTransport(context),
+            MeshSdkFactory.create(context)
+        )
+    }
+
+    DisposableEffect(Unit) {
+        messageRouter.start()
+        onDispose { messageRouter.stop() }
+    }
 
     // Audio
     val audioRecorder = remember { AudioRecorder(context) }
@@ -114,7 +134,7 @@ fun ChatScreen(
     ) { uri: Uri? ->
         uri?.let {
             scope.launch {
-                sendImage(context, it, peer, gattClient, classicClient, repository, connectionType)
+                sendImage(context, it, peer, gattClient, classicClient, repository, connectionType, messageRouter)
             }
         }
     }
@@ -141,12 +161,12 @@ fun ChatScreen(
     // Incoming messages
     LaunchedEffect(Unit) {
         gattClient.receivedMessages.collect { json ->
-            handleIncomingMessage(json, peer, repository, context)
+            handleIncomingMessage(json, peer, repository, context, messageRouter)
         }
     }
     LaunchedEffect(Unit) {
         classicClient.receivedMessages.collect { json ->
-            handleIncomingMessage(json, peer, repository, context)
+            handleIncomingMessage(json, peer, repository, context, messageRouter)
         }
     }
 
@@ -240,7 +260,8 @@ fun ChatScreen(
                                                         gattClient,
                                                         classicClient,
                                                         repository,
-                                                        connectionType
+                                                        connectionType,
+                                                        messageRouter
                                                     )
                                                 }
                                             }
@@ -305,7 +326,8 @@ fun ChatScreen(
                                                     gattClient,
                                                     classicClient,
                                                     repository,
-                                                    connectionType
+                                                    connectionType,
+                                                    messageRouter
                                                 )
                                                 messageText = ""
                                             }
@@ -513,31 +535,30 @@ suspend fun sendTextMessage(
     gattClient: GattClient,
     classicClient: ClassicClient,
     repository: MessengerRepository,
-    connectionType: String?
+    connectionType: String?,
+    messageRouter: MessageRouter
 ) {
     val msgId = UUID.randomUUID().toString()
     val deviceId = android.os.Build.MODEL
     val jsonMessage = Protocol.createTextMessage(msgId, deviceId, peer.id, text)
 
-    val sent = when (connectionType) {
-        "BLE" -> gattClient.sendMessage(jsonMessage)
-        "CLASSIC" -> classicClient.sendMessage(jsonMessage)
-        else -> false
+    val sent = if (jsonMessage.toByteArray().size <= TransportThresholds.SMALL_MESSAGE_MAX_BYTES) {
+        messageRouter.enqueueWithAck(msgId, peer.id, jsonMessage, TransportHint.BLE)
+    } else {
+        messageRouter.enqueueWithAck(msgId, peer.id, jsonMessage, TransportHint.MESH)
     }
 
-    if (sent) {
-        val message = Message(
-            msgId = msgId,
-            type = Protocol.TYPE_TEXT,
-            fromId = deviceId,
-            toId = peer.id,
-            timestamp = System.currentTimeMillis(),
-            body = text,
-            status = "sent",
-            isIncoming = false
-        )
-        repository.insertMessage(message)
-    }
+    val message = Message(
+        msgId = msgId,
+        type = Protocol.TYPE_TEXT,
+        fromId = deviceId,
+        toId = peer.id,
+        timestamp = System.currentTimeMillis(),
+        body = text,
+        status = if (sent) "sent" else "pending",
+        isIncoming = false
+    )
+    repository.insertMessage(message)
 }
 
 suspend fun sendImage(
@@ -547,7 +568,8 @@ suspend fun sendImage(
     gattClient: GattClient,
     classicClient: ClassicClient,
     repository: MessengerRepository,
-    connectionType: String?
+    connectionType: String?,
+    messageRouter: MessageRouter
 ) {
     val msgId = UUID.randomUUID().toString()
     val deviceId = android.os.Build.MODEL
@@ -560,27 +582,26 @@ suspend fun sendImage(
 
         val jsonMessage = Protocol.createImageOffer(msgId, deviceId, peer.id, fileName, fileSize, mime)
 
-        val sent = when (connectionType) {
-            "BLE" -> gattClient.sendMessage(jsonMessage)
-            "CLASSIC" -> classicClient.sendMessage(jsonMessage)
-            else -> false
+        val hint = if (fileSize >= TransportThresholds.LARGE_FILE_MIN_BYTES) {
+            TransportHint.WIFI_DIRECT
+        } else {
+            TransportHint.BLE
         }
+        val sent = messageRouter.enqueueWithAck(msgId, peer.id, jsonMessage, hint)
 
-        if (sent) {
-            val message = Message(
-                msgId = msgId,
-                type = Protocol.TYPE_IMAGE_OFFER,
-                fromId = deviceId,
-                toId = peer.id,
-                timestamp = System.currentTimeMillis(),
-                fileName = fileName,
-                fileSize = fileSize,
-                mime = mime,
-                status = "sent",
-                isIncoming = false
-            )
-            repository.insertMessage(message)
-        }
+        val message = Message(
+            msgId = msgId,
+            type = Protocol.TYPE_IMAGE_OFFER,
+            fromId = deviceId,
+            toId = peer.id,
+            timestamp = System.currentTimeMillis(),
+            fileName = fileName,
+            fileSize = fileSize,
+            mime = mime,
+            status = if (sent) "sent" else "pending",
+            isIncoming = false
+        )
+        repository.insertMessage(message)
     } catch (e: Exception) {
         Log.e("ChatScreen", "Failed to send image", e)
     }
@@ -593,7 +614,8 @@ suspend fun sendAudio(
     gattClient: GattClient,
     classicClient: ClassicClient,
     repository: MessengerRepository,
-    connectionType: String?
+    connectionType: String?,
+    messageRouter: MessageRouter
 ) {
     val msgId = UUID.randomUUID().toString()
     val deviceId = android.os.Build.MODEL
@@ -608,29 +630,28 @@ suspend fun sendAudio(
 
         val jsonMessage = Protocol.createAudioOffer(msgId, deviceId, peer.id, fileName, fileSize, duration)
 
-        val sent = when (connectionType) {
-            "BLE" -> gattClient.sendMessage(jsonMessage)
-            "CLASSIC" -> classicClient.sendMessage(jsonMessage)
-            else -> false
+        val hint = if (fileSize >= TransportThresholds.LARGE_FILE_MIN_BYTES) {
+            TransportHint.WIFI_DIRECT
+        } else {
+            TransportHint.BLE
         }
+        val sent = messageRouter.enqueueWithAck(msgId, peer.id, jsonMessage, hint)
 
-        if (sent) {
-            val message = Message(
-                msgId = msgId,
-                type = Protocol.TYPE_AUDIO_OFFER,
-                fromId = deviceId,
-                toId = peer.id,
-                timestamp = System.currentTimeMillis(),
-                fileName = fileName,
-                fileSize = fileSize,
-                filePath = audioFile.absolutePath,
-                mime = "audio/3gpp",
-                duration = duration,
-                status = "sent",
-                isIncoming = false
-            )
-            repository.insertMessage(message)
-        }
+        val message = Message(
+            msgId = msgId,
+            type = Protocol.TYPE_AUDIO_OFFER,
+            fromId = deviceId,
+            toId = peer.id,
+            timestamp = System.currentTimeMillis(),
+            fileName = fileName,
+            fileSize = fileSize,
+            filePath = audioFile.absolutePath,
+            mime = "audio/3gpp",
+            duration = duration,
+            status = if (sent) "sent" else "pending",
+            isIncoming = false
+        )
+        repository.insertMessage(message)
     } catch (e: Exception) {
         Log.e("ChatScreen", "Failed to send audio", e)
     }
@@ -640,15 +661,32 @@ suspend fun handleIncomingMessage(
     jsonMessage: String,
     peer: Peer,
     repository: MessengerRepository,
-    context: Context
+    context: Context,
+    messageRouter: MessageRouter
 ) {
     val parsed = Protocol.parseMessage(jsonMessage) ?: return
+
+    val myId = android.os.Build.MODEL
+
+    if (parsed.type == Protocol.TYPE_ACK) {
+        parsed.ackFor?.let { ackFor ->
+            repository.updateMessageStatus(ackFor, "delivered")
+            messageRouter.markDelivered(ackFor)
+        }
+        return
+    }
+
+    // Store-and-forward: if the message isn't for us, try mesh forwarding
+    if (parsed.to != null && parsed.to != myId) {
+        messageRouter.forwardViaMesh(parsed.to, jsonMessage)
+        return
+    }
 
     val message = Message(
         msgId = parsed.msgId,
         type = parsed.type,
         fromId = parsed.from,
-        toId = parsed.to ?: android.os.Build.MODEL,
+        toId = parsed.to ?: myId,
         timestamp = parsed.ts,
         body = parsed.body,
         fileName = parsed.fileName,
@@ -660,6 +698,15 @@ suspend fun handleIncomingMessage(
     )
 
     repository.insertMessage(message)
+
+    // Send ACK back for reliability
+    val ackPayload = Protocol.createAckMessage(
+        msgId = UUID.randomUUID().toString(),
+        from = myId,
+        to = parsed.from,
+        ackFor = parsed.msgId
+    )
+    messageRouter.sendAck(parsed.from, ackPayload)
 }
 
 fun formatTimestamp(timestamp: Long): String {

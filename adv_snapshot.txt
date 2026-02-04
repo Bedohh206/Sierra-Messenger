@@ -1,0 +1,11 @@
+D:\BluetoothMessenger\full_log_snapshot.txt:8:02-04 05:38:30.446 D/BleAdvertiser(24089): BLE advertising stopped
+D:\BluetoothMessenger\full_log_snapshot.txt:25:02-04 05:38:32.072 D/AdvertiseSettings(24089): setTxPowerLevel: 1
+D:\BluetoothMessenger\full_log_snapshot.txt:26:02-04 05:38:32.072 D/ADV     (24089): startAdvertising called (uuid=0000aaaa-0000-1000-8000-00805f9b34fb)
+D:\BluetoothMessenger\full_log_snapshot.txt:28:02-04 05:38:32.072 D/BluetoothLeAdvertiser(24089):  Total bytes: size:7
+D:\BluetoothMessenger\full_log_snapshot.txt:29:02-04 05:38:32.072 D/BluetoothLeAdvertiser(24089):  Total bytes: size:0
+D:\BluetoothMessenger\full_log_snapshot.txt:30:02-04 05:38:32.072 D/BluetoothLeAdvertiser(24089): TxPower == ADVERTISE_TX_POWER_LOW
+D:\BluetoothMessenger\full_log_snapshot.txt:32:02-04 05:38:32.072 D/BluetoothLeAdvertiser(24089):  Total bytes: size:7
+D:\BluetoothMessenger\full_log_snapshot.txt:33:02-04 05:38:32.072 D/BluetoothLeAdvertiser(24089):  Total bytes: size:0
+D:\BluetoothMessenger\full_log_snapshot.txt:36:02-04 05:38:32.151 D/ADV     (24089): Advertising SUCCESS: Settings [mAdvertiseMode=2, mAdvertiseTxPowerLevel=1, mAdvertiseConnectable=true, mAdvertiseDiscoverable=true, mAdvertiseTimeoutMillis=0, mOwnAddressType=-1]
+D:\BluetoothMessenger\full_log_snapshot.txt:37:02-04 05:38:32.151 D/BleAdvertiser(24089): BLE advertising started successfully
+D:\BluetoothMessenger\full_log_snapshot.txt:107:02-04 05:40:30.341 D/BleAdvertiser(24089): BLE advertising stopped

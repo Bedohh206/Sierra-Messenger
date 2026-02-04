@@ -7,13 +7,15 @@ import androidx.room.RoomDatabase
 import com.btmessenger.app.data.dao.MessageDao
 import com.btmessenger.app.data.dao.PeerDao
 import com.btmessenger.app.data.dao.GroupDao
+import com.btmessenger.app.data.dao.OutboxDao
 import com.btmessenger.app.data.entities.Message
 import com.btmessenger.app.data.entities.Peer
 import com.btmessenger.app.data.entities.Group
+import com.btmessenger.app.data.entities.OutboxMessage
 
 @Database(
-    entities = [Peer::class, Message::class, Group::class, com.btmessenger.app.data.entities.Friend::class],
-    version = 4,
+    entities = [Peer::class, Message::class, Group::class, com.btmessenger.app.data.entities.Friend::class, OutboxMessage::class],
+    version = 5,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -21,6 +23,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun messageDao(): MessageDao
     abstract fun groupDao(): GroupDao
     abstract fun friendDao(): com.btmessenger.app.data.dao.FriendDao
+    abstract fun outboxDao(): OutboxDao
     
     companion object {
         @Volatile

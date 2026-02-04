@@ -19,7 +19,10 @@
 
     <!-- Optional if you need device location for BLE scanning on older Android -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" android:maxSdkVersion="30"/>
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
+    <!-- Android 12+ runtime Bluetooth permissions (required for BLE GATT server functionality) -->
+    <!-- Declared above once already; duplicates removed. -->
 
     <uses-feature android:name="android.hardware.bluetooth" android:required="true" />
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />

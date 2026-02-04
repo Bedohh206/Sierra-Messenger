@@ -3,15 +3,18 @@ package com.btmessenger.app.data.repository
 import com.btmessenger.app.data.dao.MessageDao
 import com.btmessenger.app.data.dao.PeerDao
 import com.btmessenger.app.data.dao.GroupDao
+import com.btmessenger.app.data.dao.OutboxDao
 import com.btmessenger.app.data.entities.Message
 import com.btmessenger.app.data.entities.Peer
+import com.btmessenger.app.data.entities.OutboxMessage
 import kotlinx.coroutines.flow.Flow
 
 class MessengerRepository(
     private val peerDao: PeerDao,
     private val messageDao: MessageDao,
     private val groupDao: GroupDao,
-    private val friendDao: com.btmessenger.app.data.dao.FriendDao
+    private val friendDao: com.btmessenger.app.data.dao.FriendDao,
+    private val outboxDao: OutboxDao
 ) {
     // Peer operations
     fun getAllPeers(): Flow<List<Peer>> = peerDao.getAllPeers()
@@ -40,6 +43,9 @@ class MessengerRepository(
     suspend fun insertMessages(messages: List<Message>) = messageDao.insertMessages(messages)
     
     suspend fun updateMessage(message: Message) = messageDao.updateMessage(message)
+
+    suspend fun updateMessageStatus(messageId: String, status: String) =
+        messageDao.updateMessageStatus(messageId, status)
     
     suspend fun deleteMessage(message: Message) = messageDao.deleteMessage(message)
     
@@ -67,4 +73,21 @@ class MessengerRepository(
     suspend fun insertFriend(friend: com.btmessenger.app.data.entities.Friend) = friendDao.insertFriend(friend)
 
     suspend fun deleteFriend(friend: com.btmessenger.app.data.entities.Friend) = friendDao.deleteFriend(friend)
+
+    // Outbox operations (store-and-forward)
+    suspend fun upsertOutbox(message: OutboxMessage) = outboxDao.upsert(message)
+
+    suspend fun getOutboxDue(now: Long) = outboxDao.getDue(now)
+
+    suspend fun getOutboxById(msgId: String) = outboxDao.getById(msgId)
+
+    suspend fun updateOutboxStatus(
+        msgId: String,
+        status: String,
+        attempts: Int,
+        lastAttemptAt: Long?,
+        nextAttemptAt: Long?
+    ) = outboxDao.updateStatus(msgId, status, attempts, lastAttemptAt, nextAttemptAt)
+
+    suspend fun deleteOutboxById(msgId: String) = outboxDao.deleteById(msgId)
 }

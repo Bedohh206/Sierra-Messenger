@@ -14,6 +14,9 @@ interface MessageDao {
     
     @Query("SELECT * FROM messages WHERE msgId = :messageId")
     suspend fun getMessageById(messageId: String): Message?
+
+    @Query("UPDATE messages SET status = :status WHERE msgId = :messageId")
+    suspend fun updateMessageStatus(messageId: String, status: String)
     
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMessage(message: Message)

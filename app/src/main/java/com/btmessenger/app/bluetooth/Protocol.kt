@@ -33,6 +33,7 @@ object Protocol {
     const val TYPE_GROUP_JOIN = "GROUP_JOIN"
     const val TYPE_GROUP_LEAVE = "GROUP_LEAVE"
     const val TYPE_GROUP_MESSAGE = "GROUP_MESSAGE"
+    const val TYPE_ACK = "ACK"
     
     // Chunk size for file transfer (16KB)
     const val CHUNK_SIZE = 16384
@@ -57,7 +58,10 @@ object Protocol {
         val duration: Int? = null, // Audio duration in seconds
         val chunkIndex: Int? = null,
         val totalChunks: Int? = null,
-        val data: String? = null // Base64 encoded chunk data
+        val data: String? = null, // Base64 encoded chunk data
+        val ackFor: String? = null,
+        val hopCount: Int? = null,
+        val ttl: Int? = null
     )
     
     /**
@@ -287,6 +291,21 @@ object Protocol {
             to = to,
             ts = System.currentTimeMillis(),
             body = originalMsgId
+        )
+        return gson.toJson(message)
+    }
+
+    /**
+     * Create an ACK message to confirm receipt
+     */
+    fun createAckMessage(msgId: String, from: String, to: String, ackFor: String): String {
+        val message = Message(
+            type = TYPE_ACK,
+            msgId = msgId,
+            from = from,
+            to = to,
+            ts = System.currentTimeMillis(),
+            ackFor = ackFor
         )
         return gson.toJson(message)
     }

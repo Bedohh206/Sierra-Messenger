@@ -57,7 +57,8 @@ val repository = remember {
         database.peerDao(),
         database.messageDao(),
         database.groupDao(),
-        friendDao
+            friendDao,
+            database.outboxDao()
     )
 }
 
@@ -116,7 +117,19 @@ val gattClient = remember { GattClient(context) }
     // ✅ Streams
     val isScanning by bleScanner.isScanning.collectAsState()
     val isAdvertising by bleAdvertiser.isAdvertising.collectAsState()
-    val discoveredPeers by bleScanner.discoveredPeers.collectAsState()
+    val found by bleScanner.found.collectAsState()
+    val discoveredPeers = remember(found) {
+        found.map { result ->
+            Peer(
+                id = result.device.address,
+                name = result.device.name ?: "Unknown Device",
+                address = result.device.address,
+                type = "BLE",
+                lastSeen = System.currentTimeMillis(),
+                rssi = result.rssi
+            )
+        }
+    }
     val groups by repository.getAllGroups().collectAsState(initial = emptyList())
     val friends by repository.getAllFriends().collectAsState(initial = emptyList())
 
@@ -153,7 +166,7 @@ val gattClient = remember { GattClient(context) }
                 title = { Text("Nearby Devices") },
                 actions = {
                     IconButton(onClick = {
-                        if (isScanning) bleScanner.stopScanning() else bleScanner.startScanning()
+                        if (isScanning) bleScanner.stopScan() else bleScanner.startScanFiltered()
                     }) {
                         Icon(
                             imageVector = if (isScanning) Icons.Default.Stop else Icons.Default.Search,
@@ -163,7 +176,7 @@ val gattClient = remember { GattClient(context) }
                     IconButton(onClick = { showGroupsDialog = true }) {
                         Icon(Icons.Default.Group, contentDescription = "Groups")
                     }
-                    IconButton(onClick = { bleScanner.clearPeers() }) {
+                    IconButton(onClick = { bleScanner.clearFound() }) {
                         Icon(Icons.Default.Clear, contentDescription = "Clear")
                     }
                 }
@@ -393,7 +406,7 @@ val gattClient = remember { GattClient(context) }
 
     DisposableEffect(Unit) {
         onDispose {
-            bleScanner.stopScanning()
+            bleScanner.stopScan()
             bleAdvertiser.stopAdvertising()
             gattServer.stopServer()
             classicServer.stopServer()

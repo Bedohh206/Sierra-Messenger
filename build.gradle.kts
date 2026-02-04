@@ -11,3 +11,14 @@ buildscript {
         classpath("org.jetbrains.kotlin:compose-compiler-gradle-plugin:2.2.10")
     }
 }
+
+	subprojects {
+		configurations.all {
+			resolutionStrategy {
+				force("org.jetbrains.kotlin:kotlin-stdlib:1.9.22")
+				force("org.jetbrains.kotlin:kotlin-stdlib-common:1.9.22")
+				force("org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.22")
+				force("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.22")
+			}
+		}
+	}
