@@ -5,55 +5,70 @@ import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
 import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 
 object PermissionHelper {
-    const val REQUEST_BLUETOOTH_PERMS = 1234
+
     fun hasBluetoothPermissions(context: Context): Boolean {
-        val connect = ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.BLUETOOTH_CONNECT
-        ) == PackageManager.PERMISSION_GRANTED
-
-        val advertise = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_ADVERTISE) == PackageManager.PERMISSION_GRANTED
-        } else {
-            true
+        Log.e("PERM_CHECK", "hasBluetoothPermissions called, SDK=${Build.VERSION.SDK_INT}")
+        
+        // Android 12+ requires SCAN + CONNECT
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val required = listOf(
+                Manifest.permission.BLUETOOTH_SCAN,
+                Manifest.permission.BLUETOOTH_CONNECT
+            )
+            val result = required.all {
+                ContextCompat.checkSelfPermission(context, it) ==
+                    PackageManager.PERMISSION_GRANTED
+            }
+            Log.e("PERM_CHECK", "Android 12+: result=$result")
+            return result
         }
-
-        val scan = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED
-        } else {
-            // pre-S devices commonly require coarse location for BLE scanning
-            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        }
-
-        return connect && advertise && scan
+        
+        // Pre-Android 12: only need BLUETOOTH + BLUETOOTH_ADMIN (location is nice-to-have for scanning)
+        val btResult = ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH)
+        val btAdminResult = ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_ADMIN)
+        val bluetoothGranted = (btResult == PackageManager.PERMISSION_GRANTED) && 
+                               (btAdminResult == PackageManager.PERMISSION_GRANTED)
+        
+        Log.e("PERM_CHECK", "Pre-12: BT=$btResult BTAdmin=$btAdminResult bluetoothGranted=$bluetoothGranted")
+        return bluetoothGranted
     }
 
-    fun requestBluetoothPermissions(activity: Activity, requestCode: Int) {
-        val perms = mutableListOf<String>()
+    fun requestPre12LocationPermission(activity: Activity, requestCode: Int = 1001): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) return true
 
-        if (ContextCompat.checkSelfPermission(activity, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
-            perms.add(Manifest.permission.BLUETOOTH_CONNECT)
+        val fineGranted = ContextCompat.checkSelfPermission(
+            activity,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+
+        val coarseGranted = ContextCompat.checkSelfPermission(
+            activity,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+
+        val granted = fineGranted || coarseGranted
+
+        if (!granted) {
+            ActivityCompat.requestPermissions(
+                activity,
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                ),
+                requestCode
+            )
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            if (ContextCompat.checkSelfPermission(activity, Manifest.permission.BLUETOOTH_ADVERTISE) != PackageManager.PERMISSION_GRANTED) {
-                perms.add(Manifest.permission.BLUETOOTH_ADVERTISE)
-            }
-            if (ContextCompat.checkSelfPermission(activity, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
-                perms.add(Manifest.permission.BLUETOOTH_SCAN)
-            }
-        } else {
-            if (ContextCompat.checkSelfPermission(activity, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                perms.add(Manifest.permission.ACCESS_COARSE_LOCATION)
-            }
-        }
+        return granted
+    }
 
-        if (perms.isNotEmpty()) {
-            ActivityCompat.requestPermissions(activity, perms.toTypedArray(), requestCode)
-        }
+    fun canStartForegroundService(context: Context): Boolean {
+        return true
     }
 }

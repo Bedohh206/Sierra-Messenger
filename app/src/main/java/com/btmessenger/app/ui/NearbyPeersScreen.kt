@@ -1,18 +1,23 @@
 package com.btmessenger.app.ui
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.BluetoothSearching
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -20,12 +25,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.btmessenger.app.bluetooth.*
 import com.btmessenger.app.data.AppDatabase
 import com.btmessenger.app.data.entities.Friend
 import com.btmessenger.app.data.entities.Group
 import com.btmessenger.app.data.entities.Peer
 import com.btmessenger.app.data.repository.MessengerRepository
+import com.btmessenger.app.util.DeviceId
+import com.btmessenger.app.util.DeviceCompatibility
+import com.btmessenger.app.permission.PermissionHelper
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import kotlinx.coroutines.launch
@@ -33,6 +42,7 @@ import java.util.UUID
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.shape.RoundedCornerShape
 
+@SuppressLint("MissingPermission")
 @OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun NearbyPeersScreen(
@@ -45,6 +55,7 @@ val scope = rememberCoroutineScope()
     // UI state for dialogs
     var showGroupsDialog by remember { mutableStateOf(false) }
     var showMessageForGroup by remember { mutableStateOf<String?>(null) }
+    var showCompatibilityInfo by remember { mutableStateOf(false) }
 
 // ✅ Database / DAOs
 val database = remember { AppDatabase.getDatabase(context) }
@@ -109,17 +120,36 @@ val bleScanner = remember { BleScanner(context) }
 val bleAdvertiser = remember { BleAdvertiser(context) }
 
 val gattServer = remember { GattServer(context, friendDao) }
-val classicServer = remember { ClassicServer(context, android.os.Build.MODEL, groupDao) }
+val classicServer = remember { 
+    ClassicServer(
+        context, 
+        DeviceId.getOrCreate(context), 
+        groupDao,
+        database.peerDao(),
+        android.os.Build.MODEL
+    ) 
+}
 
-val classicClient = remember { ClassicClient(context) }
+val classicPool = remember { ClassicClientPoolProvider.get(context) }
+val classicPoolInstanceId = remember { ClassicClientPoolProvider.getInstanceId(context) }
 val gattClient = remember { GattClient(context) }
+
+LaunchedEffect(Unit) {
+    Log.d("ClassicPoolCheck", "NearbyPeersScreen poolInstanceId=$classicPoolInstanceId")
+}
 
     // ✅ Streams
     val isScanning by bleScanner.isScanning.collectAsState()
     val isAdvertising by bleAdvertiser.isAdvertising.collectAsState()
     val found by bleScanner.found.collectAsState()
-    val discoveredPeers = remember(found) {
-        found.map { result ->
+    val localAddr = remember { DeviceId.getLocalBtAddress(context) }
+    val discoveredPeers = remember(found, localAddr) {
+        val filtered = if (!DeviceId.isMaskedAddress(localAddr)) {
+            found.filter { it.device.address != localAddr }
+        } else {
+            found
+        }
+        filtered.map { result ->
             Peer(
                 id = result.device.address,
                 name = result.device.name ?: "Unknown Device",
@@ -137,14 +167,14 @@ val gattClient = remember { GattClient(context) }
     val permissionsList = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         listOf(
             Manifest.permission.BLUETOOTH_SCAN,
-            Manifest.permission.BLUETOOTH_ADVERTISE,
             Manifest.permission.BLUETOOTH_CONNECT
         )
     } else {
         listOf(
             Manifest.permission.BLUETOOTH,
             Manifest.permission.BLUETOOTH_ADMIN,
-            Manifest.permission.ACCESS_FINE_LOCATION
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION
         )
     }
     val permissionsState = rememberMultiplePermissionsState(permissionsList)
@@ -166,6 +196,36 @@ val gattClient = remember { GattClient(context) }
                 title = { Text("Nearby Devices") },
                 actions = {
                     IconButton(onClick = {
+                        if (!PermissionHelper.canStartForegroundService(context)) {
+                            Log.w("NearbyPeersScreen", "Notifications disabled; skipping FGS start")
+                            return@IconButton
+                        }
+                        val intent = Intent(context, BluetoothService::class.java)
+                        context.startService(intent)
+                    }) {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = "Start BLE"
+                        )
+                    }
+                    IconButton(onClick = {
+                        context.stopService(Intent(context, BluetoothService::class.java))
+                    }) {
+                        Icon(
+                            imageVector = Icons.Default.PowerSettingsNew,
+                            contentDescription = "Stop BLE"
+                        )
+                    }
+                    IconButton(onClick = {
+                        if (!permissionsState.allPermissionsGranted) {
+                            permissionsState.launchMultiplePermissionRequest()
+                            return@IconButton
+                        }
+                        if (!isBluetoothEnabled) {
+                            val intent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+                            enableBluetoothLauncher.launch(intent)
+                            return@IconButton
+                        }
                         if (isScanning) bleScanner.stopScan() else bleScanner.startScanFiltered()
                     }) {
                         Icon(
@@ -175,6 +235,9 @@ val gattClient = remember { GattClient(context) }
                     }
                     IconButton(onClick = { showGroupsDialog = true }) {
                         Icon(Icons.Default.Group, contentDescription = "Groups")
+                    }
+                    IconButton(onClick = { showCompatibilityInfo = true }) {
+                        Icon(Icons.Default.Info, contentDescription = "Device Info")
                     }
                     IconButton(onClick = { bleScanner.clearFound() }) {
                         Icon(Icons.Default.Clear, contentDescription = "Clear")
@@ -212,7 +275,7 @@ val gattClient = remember { GattClient(context) }
                 groups = groups,
                 onCreate = { name ->
                     val gid = UUID.randomUUID().toString()
-                    val hostIdVal = bluetoothAdapter?.address ?: android.os.Build.MODEL
+                    val hostIdVal = DeviceId.getOrCreate(context)
 
                     val g = Group(
                         groupId = gid,
@@ -246,6 +309,66 @@ val gattClient = remember { GattClient(context) }
             )
         }
 
+        // ✅ Device Compatibility Info Dialog
+        if (showCompatibilityInfo) {
+            AlertDialog(
+                onDismissRequest = { showCompatibilityInfo = false },
+                title = { Text("Device Compatibility") },
+                text = {
+                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                        Text(
+                            text = DeviceCompatibility.getCapabilitySummary(context),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        
+                        DeviceCompatibility.getRecommendation(context)?.let { recommendation ->
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            Icons.Default.Info,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            "Tip",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        recommendation,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                                    )
+                                }
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            "✅ = Supported\n⚠️ = Limited\n❌ = Not Available",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showCompatibilityInfo = false }) {
+                        Text("OK")
+                    }
+                }
+            )
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -259,7 +382,7 @@ val gattClient = remember { GattClient(context) }
                     onSend = { text ->
                         scope.launch {
                             val msgId = UUID.randomUUID().toString()
-                            val deviceId = android.os.Build.MODEL
+                            val deviceId = DeviceId.getOrCreate(context)
                             val json = Protocol.createGroupTextMessage(msgId, deviceId, gid, text)
 
                             val hostId = repository.getGroupById(gid)?.hostId
@@ -277,10 +400,11 @@ val gattClient = remember { GattClient(context) }
                                             gattClient.disconnect()
                                         }
                                     } else {
-                                        val ok = classicClient.connect(device, deviceId, deviceId)
+                                        val key = p.id
+                                        val ok = classicPool.connect(key, device, deviceId, android.os.Build.MODEL)
                                         if (ok) {
-                                            classicClient.sendMessage(json)
-                                            classicClient.disconnect()
+                                            classicPool.sendMessage(key, json)
+                                            classicPool.disconnect(key)
                                         }
                                     }
                                 }
@@ -358,7 +482,7 @@ val gattClient = remember { GattClient(context) }
                 StatusChip("Visible", isAdvertising, Icons.Default.Visibility)
             }
 
-            Divider()
+            HorizontalDivider()
 
             // ✅ Discovered peers list
             if (discoveredPeers.isEmpty()) {
@@ -370,7 +494,7 @@ val gattClient = remember { GattClient(context) }
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(
-                            imageVector = Icons.Default.BluetoothSearching,
+                            imageVector = Icons.AutoMirrored.Filled.BluetoothSearching,
                             contentDescription = null,
                             modifier = Modifier.size(64.dp),
                             tint = MaterialTheme.colorScheme.primary
@@ -396,7 +520,15 @@ val gattClient = remember { GattClient(context) }
                                     repository.insertFriend(f)
                                 }
                             },
-                            onClick = { onPeerSelected(peer) }
+                            onClick = {
+                                if (!DeviceId.isMaskedAddress(localAddr) &&
+                                    (peer.address == localAddr || peer.id == localAddr)
+                                ) {
+                                    Log.d("UI_SELECT", "Ignored self peer selection: $localAddr")
+                                } else {
+                                    onPeerSelected(peer)
+                                }
+                            }
                         )
                     }
                 }
